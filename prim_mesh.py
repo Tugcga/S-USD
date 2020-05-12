@@ -1,6 +1,7 @@
 from pxr import UsdGeom, Sdf, Usd
 from prim_xform import add_xform
 import prim_xform
+import utils
 import imp
 
 
@@ -231,28 +232,13 @@ def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_pri
             usd_subset.CreateIndicesAttr(xsi_indices_array)
 
 
-def is_constant_topology(mesh, opt_anim):
-    if opt_anim is None:
-        return True
-    else:
-        # get number of points at the first frame
-        geo = mesh.GetActivePrimitive3(opt_anim[0]).GetGeometry3(opt_anim[0])
-        vertex_count = len(geo.Vertices)
-        # next iterate by other frames
-        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
-            geo_frame = mesh.GetActivePrimitive3(frame).GetGeometry3(frame)
-            verts_frame = len(geo_frame.Vertices)
-            if vertex_count != verts_frame:
-                return False
-        return True
-
-
 def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
     '''stage is a root stage
        mesh_object is a polygonmesh X3DObject
        root_path is a string for the parent path in the stage
     '''
     imp.reload(prim_xform)
+    imp.reload(utils)
     opt_attributes = params["attr_list"]
     opt_animation = params.get("animation", None)
     opt = params.get("options", {})
@@ -263,7 +249,7 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
     usd_mesh_prim = ref_stage.GetPrimAtPath(usd_mesh.GetPath())
     usd_mesh_primvar = UsdGeom.PrimvarsAPI(usd_mesh)  # for creating primvar attributes
 
-    is_constant = is_constant_topology(mesh_object, params.get("animation", None))
+    is_constant = utils.is_constant_topology(mesh_object, params.get("animation", None))
 
     if opt.get("use_subdiv", False):
         usd_mesh.CreateSubdivisionSchemeAttr().Set("catmullClark")
@@ -274,5 +260,6 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
             set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, frame=frame)
+    ref_stage.Save()
 
     return usd_xform

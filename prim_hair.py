@@ -5,7 +5,7 @@ from prim_mesh import get_bounding_box
 
 def add_hair(app, params, stage, xsi_hair, root_path):
     usd_xform = add_xform(app, params, stage, xsi_hair, root_path)
-    usd_curves = UsdGeom.BasisCurves.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_hair.Name)
+    UsdGeom.BasisCurves.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_hair.Name)
 
     return usd_xform
 
@@ -74,5 +74,6 @@ def add_strands(app, params, path_for_objects, stage, xsi_pc, root_path):
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
             set_strands_at_frame(usd_curves, usd_curves_prim, xsi_pc.GetActivePrimitive3(frame).GetGeometry3(frame), frame)
+    ref_stage.Save()
 
     return usd_xform

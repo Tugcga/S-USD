@@ -53,5 +53,6 @@ def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
             set_camera_at_frame(ref_stage, xsi_camera, usd_camera, frame)
+    ref_stage.Save()
 
     return usd_xform

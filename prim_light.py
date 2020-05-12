@@ -55,5 +55,6 @@ def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # he
         if opt_animation is not None:
             for frame in range(opt_animation[0], opt_animation[1] + 1):
                 set_light_at_frame(usd_light, xsi_light, xsi_light_type, xsi_geom_type, frame)
+    ref_stage.Save()
 
     return usd_xform
