@@ -3,6 +3,15 @@ import utils
 import imp
 
 
+def add_transform_to_xfo(usd_xform, obj, opt_anim):
+    if opt_anim is None:
+        usd_xform.AddTransformOp().Set(utils.build_transform(obj))
+    else:
+        usd_tfm = usd_xform.AddTransformOp()
+        for frame in range(opt_anim[0], opt_anim[1] + 1):
+            usd_tfm.Set(utils.build_transform(obj, frame), Usd.TimeCode(frame))
+
+
 def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
     imp.reload(utils)
     # we should create a new stage and reference the old one to this new
@@ -25,20 +34,10 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
         usd_xform = UsdGeom.Xform.Define(stage, root_path + "/" + obj.Name)
         usd_xform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
 
-    if opt_animation is None:
-        if create_ref:
-            refXform.AddTransformOp().Set(utils.build_transform(obj))
-        else:
-            usd_xform.AddTransformOp().Set(utils.build_transform(obj))
+    if create_ref:
+        add_transform_to_xfo(refXform, obj, opt_animation)
     else:
-        if create_ref:
-            usd_tfm = refXform.AddTransformOp()
-            for frame in range(opt_animation[0], opt_animation[1] + 1):
-                usd_tfm.Set(utils.build_transform(obj, frame), Usd.TimeCode(frame))
-        else:
-            usd_tfm = usd_xform.AddTransformOp()
-            for frame in range(opt_animation[0], opt_animation[1] + 1):
-                usd_tfm.Set(utils.build_transform(obj, frame), Usd.TimeCode(frame))
+        add_transform_to_xfo(usd_xform, obj, opt_animation)
 
     if create_ref:
         return usd_xform, new_stage

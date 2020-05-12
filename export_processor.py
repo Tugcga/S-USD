@@ -48,23 +48,47 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, roo
     if obj.ObjectID not in exported_objects:
         usd_pointer = None
         if obj_type == constants.siPolyMeshType and obj_type in opt_object_types:
+            # mesh
             usd_pointer = prim_mesh.add_mesh(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == constants.siCameraPrimType and obj_type in opt_object_types:
+            # camera
             usd_pointer = prim_camera.add_camera(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == constants.siLightPrimType and obj_type in opt_object_types:
+            # light
             usd_pointer = prim_light.add_light(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == "hair" and obj_type in opt_object_types:
+            # xsi hair
             pass
             # should implement c++ command for reading hair point positions
         elif obj_type == "pointcloud" and obj_type in opt_object_types and utils.is_stands(obj) and "strands" in opt_object_types:
+            # strands hair
             usd_pointer = prim_hair.add_strands(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == "pointcloud" and obj_type in opt_object_types and not utils.is_stands(obj):
             # simple pointcloud
             pass
         elif obj_type == constants.siModelType:
-            # for models does not go to it childrens, because all models export as separate usd-files
-            prim_model.add_model(app, params, path_for_objects, stage, obj, root_path)
+            # model
+            master = obj.InstanceMaster
+            if master is None:
+                # this is model
+                # for models does not go to it childrens, because all models export as separate usd-files
+                prim_model.add_model(app, params, path_for_objects, stage, obj, root_path)
+                exported_objects.append(obj.ObjectID)
+            else:
+                # this is an instance of the model
+                master_id = master.ObjectID
+                if master_id not in exported_objects:
+                    # master is not exported, do this
+                    prim_model.add_model(app, params, path_for_objects, stage, master, root_path)
+                    exported_objects.append(master.ObjectID)
+                # next export the link of the instance
+                usd_model = stage.DefinePrim(root_path + "/" + obj.Name)
+                usd_model.GetReferences().AddReference("./" + utils.get_last_folder(path_for_objects) + "/" + master.FullName + ".usda", "/" + master.Name)
+                usd_pointer = UsdGeom.Xformable(usd_model)
+                prim_xform.add_transform_to_xfo(usd_pointer, obj, params.get("animation", None))
+
         elif (obj_type == constants.siNullPrimType or obj_type == "CameraRoot") and constants.siNullPrimType in opt_object_types:
+            # null
             usd_pointer, ref_stage = prim_xform.add_xform(app, params, path_for_objects, False, stage, obj, root_path)
         else:
             if obj_type != "CameraInterest":  # camera interest can be recteated from cameta transform and focus distance
