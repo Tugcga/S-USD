@@ -21,9 +21,9 @@ def set_camera_at_frame(stage, xsi_camera, usd_camera, frame=None):
         usd_camera.CreateFocusDistanceAttr().Set(get_distance(xsi_camera_position, xsi_interest_position), Usd.TimeCode(frame))
 
 
-def add_camera(app, params, stage, xsi_camera, root_path):
-    usd_xform = add_xform(app, params, stage, xsi_camera, root_path)
-    usd_camera = UsdGeom.Camera.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_camera.Name)
+def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
+    usd_xform, ref_stage = add_xform(app, params, path_for_objects, True, stage, xsi_camera, root_path)
+    usd_camera = UsdGeom.Camera.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_camera.Name)
     # set time independent attributes
     # perspective or ortographic
     if xsi_camera.Parameters("proj").Value == 0:
@@ -49,9 +49,9 @@ def add_camera(app, params, stage, xsi_camera, root_path):
 
     opt_animation = params.get("animation", None)
     if opt_animation is None:
-        set_camera_at_frame(stage, xsi_camera, usd_camera)
+        set_camera_at_frame(ref_stage, xsi_camera, usd_camera)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
-            set_camera_at_frame(stage, xsi_camera, usd_camera, frame)
+            set_camera_at_frame(ref_stage, xsi_camera, usd_camera, frame)
 
     return usd_xform

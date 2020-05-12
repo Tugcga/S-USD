@@ -63,10 +63,10 @@ def set_strands_at_frame(usd_curves, usd_curves_prim, xsi_geometry, frame=None):
         usd_extent.Set(get_bounding_box(data_points), Usd.TimeCode(frame))
 
 
-def add_strands(app, params, stage, xsi_pc, root_path):
-    usd_xform = add_xform(app, params, stage, xsi_pc, root_path)
-    usd_curves = UsdGeom.BasisCurves.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_pc.Name)
-    usd_curves_prim = stage.GetPrimAtPath(usd_curves.GetPath())
+def add_strands(app, params, path_for_objects, stage, xsi_pc, root_path):
+    usd_xform, ref_stage = add_xform(app, params, path_for_objects, True, stage, xsi_pc, root_path)
+    usd_curves = UsdGeom.BasisCurves.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_pc.Name)
+    usd_curves_prim = ref_stage.GetPrimAtPath(usd_curves.GetPath())
 
     opt_animation = params.get("animation", None)
     if opt_animation is None:

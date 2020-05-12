@@ -13,9 +13,9 @@ def set_light_at_frame(usd_light, xsi_light, xsi_light_type, xsi_geom_type, fram
         usd_light.CreateLengthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").Value, Usd.TimeCode(frame))
 
 
-def add_light(app, params, stage, xsi_light, root_path):  # here me add only basic parameters, all other will be defined in the material
+def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # here me add only basic parameters, all other will be defined in the material
     # basic transform
-    usd_xform = add_xform(app, params, stage, xsi_light, root_path)
+    usd_xform, ref_stage = add_xform(app, params, path_for_objects, True, stage, xsi_light, root_path)
     # get the type of the light
     xsi_light_type = xsi_light.Parameters("Type").Value
     usd_light = None
@@ -25,17 +25,17 @@ def add_light(app, params, stage, xsi_light, root_path):  # here me add only bas
         xsi_geom_type = xsi_light.Parameters("LightAreaGeom").Value
         if xsi_is_area:
             if xsi_geom_type == 1:  # rectangular
-                usd_light = UsdLux.RectLight.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
+                usd_light = UsdLux.RectLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
             elif xsi_geom_type == 2:  # disc
-                usd_light = UsdLux.DiskLight.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
+                usd_light = UsdLux.DiskLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
             elif xsi_geom_type == 3:  # sphere
-                usd_light = UsdLux.SphereLight.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
+                usd_light = UsdLux.SphereLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
             elif xsi_geom_type == 4:  # cylinder
-                usd_light = UsdLux.CylinderLight.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
+                usd_light = UsdLux.CylinderLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
     elif xsi_light_type == 1:  # infinite
-        usd_light = UsdLux.DistantLight.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
+        usd_light = UsdLux.DistantLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
     elif xsi_light_type == 2:  # spot
-        usd_light = UsdLux.DistantLight.Define(stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
+        usd_light = UsdLux.DistantLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
 
     if usd_light is not None:
         # set neutral color

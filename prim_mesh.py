@@ -247,7 +247,7 @@ def is_constant_topology(mesh, opt_anim):
         return True
 
 
-def add_mesh(app, params, stage, mesh_object, root_path):
+def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
     '''stage is a root stage
        mesh_object is a polygonmesh X3DObject
        root_path is a string for the parent path in the stage
@@ -257,10 +257,10 @@ def add_mesh(app, params, stage, mesh_object, root_path):
     opt_animation = params.get("animation", None)
     opt = params.get("options", {})
     # create root xform
-    usd_xform = add_xform(app, params, stage, mesh_object, root_path)
+    usd_xform, ref_stage = add_xform(app, params, path_for_objects, True, stage, mesh_object, root_path)
     # add mesh prim component
-    usd_mesh = UsdGeom.Mesh.Define(stage, str(usd_xform.GetPath()) + "/" + "Mesh")
-    usd_mesh_prim = stage.GetPrimAtPath(usd_mesh.GetPath())
+    usd_mesh = UsdGeom.Mesh.Define(ref_stage, str(usd_xform.GetPath()) + "/" + "Mesh")
+    usd_mesh_prim = ref_stage.GetPrimAtPath(usd_mesh.GetPath())
     usd_mesh_primvar = UsdGeom.PrimvarsAPI(usd_mesh)  # for creating primvar attributes
 
     is_constant = is_constant_topology(mesh_object, params.get("animation", None))
@@ -270,9 +270,9 @@ def add_mesh(app, params, stage, mesh_object, root_path):
     else:
         usd_mesh.CreateSubdivisionSchemeAttr().Set("none")
     if opt_animation is None:
-        set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant)
+        set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
-            set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, frame=frame)
+            set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, frame=frame)
 
     return usd_xform
