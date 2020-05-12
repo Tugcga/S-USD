@@ -25,7 +25,6 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
         # add dfault root xform node for this new stage
         usd_xform = UsdGeom.Xform.Define(new_stage, "/" + obj.Name)
         # reference main stage to this new stage
-        # ref = stage.OverridePrim(root_path + "/" + obj.Name)
         ref = stage.DefinePrim(root_path + "/" + obj.Name)
         ref.GetReferences().AddReference("./" + utils.get_last_folder(path_for_objects) + "/" + new_stage_name, "/" + obj.Name)
         refXform = UsdGeom.Xformable(ref)

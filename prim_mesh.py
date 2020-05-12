@@ -1,42 +1,7 @@
 from pxr import UsdGeom, Sdf, Usd
-from prim_xform import add_xform
 import prim_xform
 import utils
 import imp
-
-
-def get_bounding_box(positions):
-    min_x = positions[0][0]
-    min_y = positions[0][1]
-    min_z = positions[0][2]
-    max_x = positions[0][0]
-    max_y = positions[0][1]
-    max_z = positions[0][2]
-    for p in positions:
-        if p[0] < min_x:
-            min_x = p[0]
-        elif p[0] > max_x:
-            max_x = p[0]
-        if p[1] < min_y:
-            min_y = p[1]
-        elif p[1] > max_y:
-            max_y = p[1]
-        if p[2] < min_z:
-            min_z = p[2]
-        elif p[2] > max_z:
-            max_z = p[2]
-    return [(min_x, min_y, min_z), (max_x, max_y, max_z)]
-
-
-def get_index_in_array(array, value):  # also for tuple
-    for a_index in range(len(array)):
-        if array[a_index] == value:
-            return a_index
-    return None
-
-
-def vector_to_tuple(vector):
-    return (vector.X, vector.Y, vector.Z)
 
 
 def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, frame=None):
@@ -65,9 +30,9 @@ def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_pri
 
     usd_extent = usd_mesh_prim.CreateAttribute("extent", Sdf.ValueTypeNames.Float3Array)
     if frame is None:
-        usd_extent.Set(get_bounding_box(xsi_point_positions))
+        usd_extent.Set(utils.get_bounding_box(xsi_point_positions))
     else:
-        usd_extent.Set(get_bounding_box(xsi_point_positions), Usd.TimeCode(frame))
+        usd_extent.Set(utils.get_bounding_box(xsi_point_positions), Usd.TimeCode(frame))
 
     # set mesh attributes
     usd_points_attr = usd_mesh.CreatePointsAttr()
@@ -101,7 +66,7 @@ def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_pri
             p_samples = xsi_polygon.Samples
             p_nodes = xsi_polygon.Nodes
             for ps_index in range(p_samples.Count):
-                xsi_normals.append(vector_to_tuple(p_nodes[ps_index].Normal))
+                xsi_normals.append(utils.vector_to_tuple(p_nodes[ps_index].Normal))
         # may be normals were modified
         for xsi_cluster in xsi_sample_clusters:
             for prop in xsi_cluster.Properties:
@@ -243,7 +208,7 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
     opt_animation = params.get("animation", None)
     opt = params.get("options", {})
     # create root xform
-    usd_xform, ref_stage = add_xform(app, params, path_for_objects, True, stage, mesh_object, root_path)
+    usd_xform, ref_stage = prim_xform.add_xform(app, params, path_for_objects, True, stage, mesh_object, root_path)
     # add mesh prim component
     usd_mesh = UsdGeom.Mesh.Define(ref_stage, str(usd_xform.GetPath()) + "/" + "Mesh")
     usd_mesh_prim = ref_stage.GetPrimAtPath(usd_mesh.GetPath())

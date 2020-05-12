@@ -43,7 +43,44 @@ def is_constant_topology(mesh, opt_anim):
         return True
 
 
+def vector_to_tuple(vector):
+    return (vector.X, vector.Y, vector.Z)
+
+
 # --------------------General----------------------------
 def get_last_folder(path):
     parts = path.split("\\")
     return parts[-2]
+
+
+def get_bounding_box(positions):
+    if len(positions) == 0:
+        return [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)]
+
+    min_x = positions[0][0]
+    min_y = positions[0][1]
+    min_z = positions[0][2]
+    max_x = positions[0][0]
+    max_y = positions[0][1]
+    max_z = positions[0][2]
+    for p in positions:
+        if p[0] < min_x:
+            min_x = p[0]
+        elif p[0] > max_x:
+            max_x = p[0]
+        if p[1] < min_y:
+            min_y = p[1]
+        elif p[1] > max_y:
+            max_y = p[1]
+        if p[2] < min_z:
+            min_z = p[2]
+        elif p[2] > max_z:
+            max_z = p[2]
+    return [(min_x, min_y, min_z), (max_x, max_y, max_z)]
+
+
+def get_index_in_array(array, value):  # also for tuple
+    for a_index in range(len(array)):
+        if array[a_index] == value:
+            return a_index
+    return None

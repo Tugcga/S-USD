@@ -2,15 +2,26 @@ from pxr import Usd, UsdLux
 from prim_xform import add_xform
 
 
-def set_light_at_frame(usd_light, xsi_light, xsi_light_type, xsi_geom_type, frame=None):
+def set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame=None):
     if xsi_light_type == 0 and xsi_geom_type == 1:  # rectangular light
-        usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
-        usd_light.CreateHeightAttr().Set(xsi_light.Parameters("LightAreaXformSY").Value, Usd.TimeCode(frame))
+        if frame is None:
+            usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
+            usd_light.CreateHeightAttr().Set(xsi_light.Parameters("LightAreaXformSY").Value)
+        else:
+            usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
+            usd_light.CreateHeightAttr().Set(xsi_light.Parameters("LightAreaXformSY").Value, Usd.TimeCode(frame))
     if xsi_light_type == 0 and (xsi_geom_type == 2 or xsi_geom_type == 3):  # disc or sphere light
-        usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
+        if frame is None:
+            usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
+        else:
+            usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
     if xsi_light_type == 0 and xsi_geom_type == 4:  # cylinder light
-        usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
-        usd_light.CreateLengthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").Value, Usd.TimeCode(frame))
+        if frame is None:
+            usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
+            usd_light.CreateLengthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").Value)
+        else:
+            usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
+            usd_light.CreateLengthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").Value, Usd.TimeCode(frame))
 
 
 def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # here me add only basic parameters, all other will be defined in the material
@@ -52,9 +63,11 @@ def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # he
 
         # set animated parameters
         opt_animation = params["animation"]
+        if opt_animation is None:
+            set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light)
         if opt_animation is not None:
             for frame in range(opt_animation[0], opt_animation[1] + 1):
-                set_light_at_frame(usd_light, xsi_light, xsi_light_type, xsi_geom_type, frame)
+                set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame)
     ref_stage.Save()
 
     return usd_xform

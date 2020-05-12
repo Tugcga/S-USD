@@ -7,6 +7,7 @@ import prim_camera
 import prim_light
 import prim_hair
 import prim_model
+import prim_pointcloud
 import utils
 import imp
 
@@ -23,6 +24,7 @@ def export(app, file_path, params):
     imp.reload(prim_light)
     imp.reload(prim_hair)
     imp.reload(prim_model)
+    imp.reload(prim_pointcloud)
     imp.reload(utils)
 
     stage = Usd.Stage.CreateNew(file_path)
@@ -64,8 +66,8 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, roo
             # strands hair
             usd_pointer = prim_hair.add_strands(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == "pointcloud" and obj_type in opt_object_types and not utils.is_stands(obj):
-            # simple pointcloud
-            pass
+            # pointcloud
+            usd_pointer = prim_pointcloud.add_pointcloud(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == constants.siModelType:
             # model
             master = obj.InstanceMaster

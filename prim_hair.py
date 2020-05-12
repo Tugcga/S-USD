@@ -1,6 +1,7 @@
 from pxr import UsdGeom, Sdf, Usd
 from prim_xform import add_xform
-from prim_mesh import get_bounding_box
+import utils
+import imp
 
 
 def add_hair(app, params, stage, xsi_hair, root_path):
@@ -10,11 +11,7 @@ def add_hair(app, params, stage, xsi_hair, root_path):
     return usd_xform
 
 
-def vector_to_tuple(vector):
-    return (vector.X, vector.Y, vector.Z)
-
-
-def set_strands_at_frame(usd_curves, usd_curves_prim, xsi_geometry, frame=None):
+def set_strands_at_frame(xsi_geometry, usd_curves, usd_curves_prim, frame=None):
     # we should get point positions, strand positions and size attribute
     xsi_pp = xsi_geometry.GetICEAttributeFromName("PointPosition")
     xsi_sp = xsi_geometry.GetICEAttributeFromName("StrandPosition")
@@ -39,10 +36,10 @@ def set_strands_at_frame(usd_curves, usd_curves_prim, xsi_geometry, frame=None):
     data_width = []
     for strand_index in range(len(xsi_pp_data)):
         # start point
-        data_points.append(vector_to_tuple(xsi_pp_data[strand_index]))
+        data_points.append(utils.vector_to_tuple(xsi_pp_data[strand_index]))
         # next strand points
         for p_index in range(len(xsi_sp_data[strand_index])):
-            data_points.append(vector_to_tuple(xsi_sp_data[strand_index][p_index]))
+            data_points.append(utils.vector_to_tuple(xsi_sp_data[strand_index][p_index]))
         data_vertex_count.append(len(xsi_sp_data[strand_index]) + 1)
         data_width += [xsi_size_data[strand_index] if strand_index < len(xsi_size_data) else xsi_size_data[-1]] * (len(xsi_sp_data[strand_index]) + 1)
 
@@ -58,22 +55,23 @@ def set_strands_at_frame(usd_curves, usd_curves_prim, xsi_geometry, frame=None):
     # set bounding box
     usd_extent = usd_curves_prim.CreateAttribute("extent", Sdf.ValueTypeNames.Float3Array)
     if frame is None:
-        usd_extent.Set(get_bounding_box(data_points))
+        usd_extent.Set(utils.get_bounding_box(data_points))
     else:
-        usd_extent.Set(get_bounding_box(data_points), Usd.TimeCode(frame))
+        usd_extent.Set(utils.get_bounding_box(data_points), Usd.TimeCode(frame))
 
 
 def add_strands(app, params, path_for_objects, stage, xsi_pc, root_path):
+    imp.reload(utils)
     usd_xform, ref_stage = add_xform(app, params, path_for_objects, True, stage, xsi_pc, root_path)
     usd_curves = UsdGeom.BasisCurves.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_pc.Name)
     usd_curves_prim = ref_stage.GetPrimAtPath(usd_curves.GetPath())
 
     opt_animation = params.get("animation", None)
     if opt_animation is None:
-        set_strands_at_frame(usd_curves, usd_curves_prim, xsi_pc.GetActivePrimitive3().Geometry)
+        set_strands_at_frame(xsi_pc.GetActivePrimitive3().Geometry, usd_curves, usd_curves_prim)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
-            set_strands_at_frame(usd_curves, usd_curves_prim, xsi_pc.GetActivePrimitive3(frame).GetGeometry3(frame), frame)
+            set_strands_at_frame(xsi_pc.GetActivePrimitive3(frame).GetGeometry3(frame), usd_curves, usd_curves_prim, frame)
     ref_stage.Save()
 
     return usd_xform
