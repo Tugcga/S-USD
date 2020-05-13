@@ -1,10 +1,10 @@
-from pxr import UsdGeom, Sdf, Usd
+from pxr import UsdGeom, Sdf, Usd, UsdShade
 import prim_xform
 import utils
 import imp
 
 
-def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, frame=None):
+def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=None):
     # read mesh data
     xsi_polygonmesh = mesh_object.GetActivePrimitive3().Geometry if frame is None else mesh_object.GetActivePrimitive3(frame).GetGeometry3(frame)
     xsi_mesh_data = xsi_polygonmesh.Get2()
@@ -196,8 +196,13 @@ def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_pri
             usd_subset.CreateElementTypeAttr(UsdGeom.Tokens.face)
             usd_subset.CreateIndicesAttr(xsi_indices_array)
 
+            # bind cluster material if it differs form the main object material
+            xsi_cluster_material = xsi_poly_cluster.Material
+            if not utils.is_materials_equals(mesh_object.Material, xsi_cluster_material):
+                UsdShade.MaterialBindingAPI(usd_subset).Bind(material_to_usd[utils.build_material_identifier(xsi_cluster_material)])
 
-def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
+
+def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_map, root_path):
     '''stage is a root stage
        mesh_object is a polygonmesh X3DObject
        root_path is a string for the parent path in the stage
@@ -214,6 +219,21 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
     usd_mesh_prim = ref_stage.GetPrimAtPath(usd_mesh.GetPath())
     usd_mesh_primvar = UsdGeom.PrimvarsAPI(usd_mesh)  # for creating primvar attributes
 
+    # add refs to all materials of the object
+    material_to_usd = {}
+    ref_path = materials_map.get("ref_path", None)
+    if ref_path is not None:
+        for xsi_mat in mesh_object.Materials:
+            if utils.build_material_identifier(xsi_mat) in materials_map:
+                mat_name = utils.buil_material_name(xsi_mat)
+                mat_ref = ref_stage.DefinePrim(str(usd_xform.GetPath()) + "/" + mat_name)
+                mat_ref.GetReferences().AddReference(utils.remove_first_folder(ref_path[0]), ref_path[1] + "/" + mat_name)
+                material_to_usd[utils.build_material_identifier(xsi_mat)] = UsdShade.Material(ref_stage.GetPrimAtPath(mat_ref.GetPath()))
+    # bind the main material
+    main_material = mesh_object.Material
+    if utils.build_material_identifier(xsi_mat) in material_to_usd:
+        UsdShade.MaterialBindingAPI(usd_mesh_prim).Bind(material_to_usd[utils.build_material_identifier(main_material)])
+
     is_constant = utils.is_constant_topology(mesh_object, params.get("animation", None))
 
     if opt.get("use_subdiv", False):
@@ -221,10 +241,10 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, root_path):
     else:
         usd_mesh.CreateSubdivisionSchemeAttr().Set("none")
     if opt_animation is None:
-        set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant)
+        set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
-            set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, frame=frame)
+            set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=frame)
     ref_stage.Save()
 
     return usd_xform

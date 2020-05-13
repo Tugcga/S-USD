@@ -47,6 +47,18 @@ def vector_to_tuple(vector):
     return (vector.X, vector.Y, vector.Z)
 
 
+def is_materials_equals(mat_a, mat_b):
+    return mat_a.Name == mat_b.Name and mat_a.Library.Name == mat_b.Library.Name
+
+
+def buil_material_name(material):
+    return material.Library.Name + "_" + material.Name
+
+
+def build_material_identifier(material):
+    return (material.Library.Name, material.Name)
+
+
 # --------------------General----------------------------
 def get_last_folder(path):
     parts = path.split("\\")
@@ -60,6 +72,13 @@ def get_file_extension(path):
 def get_file_name(full_name):
     parts = full_name.split(".")
     return ".".join(parts[:-1])
+
+
+def remove_first_folder(path):
+    '''transform the path a/b/c/d to a/c/d
+    '''
+    parts = path.split("/")
+    return "/".join([parts[0]] + parts[2:])
 
 
 def get_bounding_box(positions):

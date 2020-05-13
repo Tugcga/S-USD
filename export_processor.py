@@ -8,6 +8,7 @@ import prim_light
 import prim_hair
 import prim_model
 import prim_pointcloud
+import materials
 import utils
 import imp
 
@@ -20,6 +21,7 @@ def export(app, file_path, params):
     imp.reload(prim_hair)
     imp.reload(prim_model)
     imp.reload(prim_pointcloud)
+    imp.reload(materials)
     imp.reload(utils)
 
     stage = Usd.Stage.CreateNew(file_path)
@@ -27,20 +29,33 @@ def export(app, file_path, params):
     path_for_objects = path_head + "\\" + utils.get_file_name(path_tail) + "_objects\\"
     utils.add_stage_metadata(stage, params)
 
-    params["options"]["extension"] = utils.get_file_extension(file_path)
+    opts = params.get("options", None)
+    if opts is not None:
+        opts["extension"] = utils.get_file_extension(file_path)
+
+    is_materials = True
+    mats = params.get("materials", None)
+    if mats is not None:
+        is_materials = mats.get("is_materials", True)
 
     root_path = ""
+    materials_map = {}  # key - (library, material), value - usd material
+    materials_ref_path = None
+    if is_materials:
+        materials_ref_path = materials.export_materials(app, params, stage, path_for_objects, root_path, materials_map)
+    materials_map["ref_path"] = materials_ref_path  # also add to this map for simplicity, (path to file, pointer path in usd)
+
     exported_objects = []  # store here ObjectID of exported objects
     if len(params["objects_list"]) == 1 and params["objects_list"][0].ObjectID == app.ActiveProject2.ActiveScene.Root.ObjectID:
         for obj in app.ActiveProject2.ActiveScene.Root.Children:
-            export_step(app, params, path_for_objects, stage, obj, exported_objects, root_path)
+            export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_map, root_path)
     else:
         for obj in params["objects_list"]:
-            export_step(app, params, path_for_objects, stage, obj, exported_objects, root_path)
+            export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_map, root_path)
     stage.Save()
 
 
-def export_step(app, params, path_for_objects, stage, obj, exported_objects, root_path):
+def export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_map, root_path):
     opt_object_types = params.get("object_types", ())
     opt = params.get("options", {})
     obj_type = obj.Type
@@ -48,7 +63,7 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, roo
         usd_pointer = None
         if obj_type == constants.siPolyMeshType and obj_type in opt_object_types:
             # mesh
-            usd_pointer = prim_mesh.add_mesh(app, params, path_for_objects, stage, obj, root_path)
+            usd_pointer = prim_mesh.add_mesh(app, params, path_for_objects, stage, obj, materials_map, root_path)
         elif obj_type == constants.siCameraPrimType and obj_type in opt_object_types:
             # camera
             usd_pointer = prim_camera.add_camera(app, params, path_for_objects, stage, obj, root_path)
@@ -57,27 +72,27 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, roo
             usd_pointer = prim_light.add_light(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == "hair" and obj_type in opt_object_types:
             # xsi hair
-            usd_pointer = prim_hair.add_hair(app, params, path_for_objects, stage, obj, root_path)
+            usd_pointer = prim_hair.add_hair(app, params, path_for_objects, stage, obj, materials_map, root_path)
         elif obj_type == "pointcloud" and obj_type in opt_object_types and utils.is_stands(obj) and "strands" in opt_object_types:
             # strands hair
-            usd_pointer = prim_hair.add_strands(app, params, path_for_objects, stage, obj, root_path)
+            usd_pointer = prim_hair.add_strands(app, params, path_for_objects, stage, obj, materials_map, root_path)
         elif obj_type == "pointcloud" and obj_type in opt_object_types and not utils.is_stands(obj):
             # pointcloud
-            usd_pointer = prim_pointcloud.add_pointcloud(app, params, path_for_objects, stage, obj, root_path)
+            usd_pointer = prim_pointcloud.add_pointcloud(app, params, path_for_objects, stage, obj, materials_map, root_path)
         elif obj_type == constants.siModelType:
             # model
             master = obj.InstanceMaster
             if master is None:
                 # this is model
                 # for models does not go to it childrens, because all models export as separate usd-files
-                prim_model.add_model(app, params, path_for_objects, stage, obj, root_path)
+                prim_model.add_model(app, params, path_for_objects, stage, obj, materials_map, root_path)
                 exported_objects.append(obj.ObjectID)
             else:
                 # this is an instance of the model
                 master_id = master.ObjectID
                 if master_id not in exported_objects:
                     # master is not exported, do this
-                    prim_model.add_model(app, params, path_for_objects, stage, master, root_path)
+                    prim_model.add_model(app, params, path_for_objects, stage, master, materials_map, root_path)
                     exported_objects.append(master.ObjectID)
                 # next export the link of the instance
                 usd_model = stage.DefinePrim(root_path + "/" + obj.Name)
@@ -98,4 +113,4 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, roo
         if usd_pointer is not None:
             exported_objects.append(obj.ObjectID)
             for child in obj.Children:
-                export_step(app, params, path_for_objects, stage, child, exported_objects, str(usd_pointer.GetPath()))
+                export_step(app, params, path_for_objects, stage, child, exported_objects, materials_map, str(usd_pointer.GetPath()))

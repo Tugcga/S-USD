@@ -45,7 +45,7 @@ def set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim, frame=None):
     set_curves_data(usd_curves, usd_curves_prim, data_points, list(xsi_length), xsi_width, frame)
 
 
-def add_hair(app, params, path_for_objects, stage, xsi_hair, root_path):
+def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_map, root_path):
     imp.reload(utils)
     imp.reload(prim_xform)
     usd_xform, ref_stage = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_hair, root_path)
@@ -90,7 +90,7 @@ def set_strands_at_frame(xsi_geometry, usd_curves, usd_curves_prim, frame=None):
     set_curves_data(usd_curves, usd_curves_prim, data_points, data_vertex_count, data_width, frame)
 
 
-def add_strands(app, params, path_for_objects, stage, xsi_pc, root_path):
+def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_map, root_path):
     imp.reload(utils)
     imp.reload(prim_xform)
     usd_xform, ref_stage = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_pc, root_path)

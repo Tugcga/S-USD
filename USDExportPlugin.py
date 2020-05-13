@@ -69,6 +69,7 @@ def USDExport_Init(in_ctxt):
     args.Add("animation")  # None if no animation, (start, end) for export animation interval
     args.Add("types")  # [type1, type2, ...]
     args.Add("attributes")  # [attr1, attr2, ...] each attr is a string ("normal", "uv", ...)
+    args.Add("is_materials")
     args.Add("use_subdiv")
     args.Add("ignore_unknown")
 
@@ -81,18 +82,20 @@ def USDExport_Execute(*args):
     file_path = args[0]
     # objects_list = args[1] if args[1] is not None else [app.ActiveProject2.ActiveScene.Root]
     objects_list = [app.ActiveProject2.ActiveScene.Root] if args[1] is None or len(args[1]) == 0 or (str(args[1]) == "Plugin Manager") else args[1]
-    animation = (1, 10)  # args[2]  for test only
+    animation = None  # args[2]  for test only
     object_types = args[3] if args[3] is not None else ("strands", "hair", constants.siModelType, constants.siNullPrimType, constants.siPolyMeshType, constants.siLightPrimType, constants.siCameraPrimType, "pointcloud")  # for empty arg use full list of object types
     attr_list = args[4] if args[4] is not None else ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')  # for empty arg use full list of attributes
-    use_subdiv = args[5] if args[5] is not None else False
-    ignore_unknown = args[6] if args[6] is not None else True
+    is_materials = args[5] if args[5] is not None else True
+    use_subdiv = args[6] if args[6] is not None else False
+    ignore_unknown = args[7] if args[7] is not None else True
 
     params = {"animation": animation,
               "objects_list": objects_list,
               "object_types": object_types,
               "attr_list": attr_list,
               "options": {"use_subdiv": use_subdiv,
-                          "ignore_unknown": ignore_unknown}}
+                          "ignore_unknown": ignore_unknown},
+              "materials": {"is_materials": is_materials}}
 
     imp.reload(export_processor)
     export_processor.export(app, "D:\\Graphic\\For Softimage\\Projects\\USD Development\\Models\\test.usda", params)
@@ -217,7 +220,7 @@ def USDExportOpen_Execute():
     if rtn is False:
         # click "ok", execute export command
         objects_types = []
-        if prop.Parameters("is_null").Value:
+        if prop.Parameters("is_nulls").Value:
             objects_types.append(constants.siNullPrimType)
         if prop.Parameters("is_polymesh").Value:
             objects_types.append(constants.siPolyMeshType)
@@ -231,7 +234,7 @@ def USDExportOpen_Execute():
             objects_types.append("hair")
         if prop.Parameters("is_pointclouds").Value:
             objects_types.append("pointcloud")
-        if prop.Parameters("is_model").Value:
+        if prop.Parameters("is_models").Value:
             objects_types.append(constants.siModelType)
         attributes = []
         if prop.Parameters("is_uv_maps").Value:
@@ -255,6 +258,7 @@ def USDExportOpen_Execute():
                       (prop.Parameters("start_frame").Value, prop.Parameters("end_frame").Value) if prop.Parameters("is_animation").Value else None,
                       objects_types,
                       attributes,
+                      prop.Parameters("is_materials").Value,
                       prop.Parameters("opt_subdiv").Value,
                       prop.Parameters("opt_ignore_unknown").Value)
 

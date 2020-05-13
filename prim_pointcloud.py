@@ -36,7 +36,7 @@ def set_pointcloud_at_frame(pointcloud_geometry, usd_pointcloud, usd_points_prim
         usd_extent.Set(utils.get_bounding_box(data_points), Usd.TimeCode(frame))
 
 
-def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, root_path):
+def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, materials_map, root_path):
     imp.reload(prim_xform)
     imp.reload(utils)
 
