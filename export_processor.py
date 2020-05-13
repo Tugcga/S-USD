@@ -60,8 +60,7 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, roo
             usd_pointer = prim_light.add_light(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == "hair" and obj_type in opt_object_types:
             # xsi hair
-            pass
-            # should implement c++ command for reading hair point positions
+            usd_pointer = prim_hair.add_hair(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == "pointcloud" and obj_type in opt_object_types and utils.is_stands(obj) and "strands" in opt_object_types:
             # strands hair
             usd_pointer = prim_hair.add_strands(app, params, path_for_objects, stage, obj, root_path)

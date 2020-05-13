@@ -82,7 +82,7 @@ def USDExport_Execute(*args):
     # objects_list = args[1] if args[1] is not None else [app.ActiveProject2.ActiveScene.Root]
     objects_list = [app.ActiveProject2.ActiveScene.Root] if args[1] is None or len(args[1]) == 0 or (str(args[1]) == "Plugin Manager") else args[1]
     animation = (1, 10)  # args[2]  for test only
-    object_types = args[3] if args[3] is not None else ("strands", constants.siModelType, constants.siNullPrimType, constants.siPolyMeshType, constants.siLightPrimType, constants.siCameraPrimType, "pointcloud")  # for empty arg use full list of object types
+    object_types = args[3] if args[3] is not None else ("strands", "hair", constants.siModelType, constants.siNullPrimType, constants.siPolyMeshType, constants.siLightPrimType, constants.siCameraPrimType, "pointcloud")  # for empty arg use full list of object types
     attr_list = args[4] if args[4] is not None else ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')  # for empty arg use full list of attributes
     use_subdiv = args[5] if args[5] is not None else False
     ignore_unknown = args[6] if args[6] is not None else True
@@ -121,11 +121,13 @@ def USDExportOpen_Execute():
     param.Animatable = False
     param = prop.AddParameter3("is_strands", constants.siBool, True)
     param.Animatable = False
+    param = prop.AddParameter3("is_hairs", constants.siBool, True)
+    param.Animatable = False
     param = prop.AddParameter3("is_pointclouds", constants.siBool, True)
     param.Animatable = False
-    param = prop.AddParameter3("is_null", constants.siBool, True)
+    param = prop.AddParameter3("is_nulls", constants.siBool, True)
     param.Animatable = False
-    param = prop.AddParameter3("is_model", constants.siBool, True)
+    param = prop.AddParameter3("is_models", constants.siBool, True)
     param.Animatable = False
     # attributes
     param = prop.AddParameter3("is_uv_maps", constants.siBool, True)
@@ -162,7 +164,7 @@ def USDExportOpen_Execute():
     layout.AddGroup("Objects to Export")
     layout.AddItem("is_selection", "Selection Only")
     layout.AddRow()
-    layout.AddItem("is_null", "Null")
+    layout.AddItem("is_nulls", "Null")
     layout.AddItem("is_polymesh", "Polygon Mesh")
     layout.AddItem("is_lights", "Lights")
     layout.EndRow()
@@ -172,8 +174,8 @@ def USDExportOpen_Execute():
     layout.AddItem("is_pointclouds", "Pointclouds")
     layout.EndRow()
     layout.AddRow()
-    layout.AddItem("is_model", "Model")
-    layout.AddSpacer()
+    layout.AddItem("is_models", "Model")
+    layout.AddItem("is_hairs", "Hairs")
     layout.AddSpacer()
     layout.EndRow()
     layout.EndGroup()
@@ -225,6 +227,8 @@ def USDExportOpen_Execute():
             objects_types.append(constants.siCameraPrimType)
         if prop.Parameters("is_strands").Value:
             objects_types.append("strands")
+        if prop.Parameters("is_hairs").Value:
+            objects_types.append("hair")
         if prop.Parameters("is_pointclouds").Value:
             objects_types.append("pointcloud")
         if prop.Parameters("is_model").Value:
