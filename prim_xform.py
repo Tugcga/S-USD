@@ -18,7 +18,7 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
     opt_animation = params.get("animation", None)
     xsi_vis_prop = obj.Properties("Visibility")
     if create_ref:
-        new_stage_name = obj.FullName + ".usda"
+        new_stage_name = obj.FullName + "." + utils.get_extension_from_params(params)
         new_stage = Usd.Stage.CreateNew(path_for_objects + new_stage_name)
         utils.add_stage_metadata(new_stage, params)
 

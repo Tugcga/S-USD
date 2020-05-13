@@ -12,11 +12,6 @@ import utils
 import imp
 
 
-def get_file_name(full_name):
-    parts = full_name.split(".")
-    return ".".join(parts[:-1])
-
-
 def export(app, file_path, params):
     imp.reload(prim_xform)
     imp.reload(prim_mesh)
@@ -29,8 +24,10 @@ def export(app, file_path, params):
 
     stage = Usd.Stage.CreateNew(file_path)
     path_head, path_tail = os.path.split(file_path)
-    path_for_objects = path_head + "\\" + get_file_name(path_tail) + "_objects\\"
+    path_for_objects = path_head + "\\" + utils.get_file_name(path_tail) + "_objects\\"
     utils.add_stage_metadata(stage, params)
+
+    params["options"]["extension"] = utils.get_file_extension(file_path)
 
     root_path = ""
     exported_objects = []  # store here ObjectID of exported objects

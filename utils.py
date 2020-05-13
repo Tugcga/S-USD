@@ -53,6 +53,15 @@ def get_last_folder(path):
     return parts[-2]
 
 
+def get_file_extension(path):
+    return path.split(".")[-1]
+
+
+def get_file_name(full_name):
+    parts = full_name.split(".")
+    return ".".join(parts[:-1])
+
+
 def get_bounding_box(positions):
     if len(positions) == 0:
         return [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)]
@@ -84,3 +93,11 @@ def get_index_in_array(array, value):  # also for tuple
         if array[a_index] == value:
             return a_index
     return None
+
+
+def get_extension_from_params(params):
+    opts = params.get("options", None)
+    if opts is None:
+        return "usd"
+    else:
+        return opts.get("extension", "usd")
