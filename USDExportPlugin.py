@@ -48,11 +48,17 @@ def XSILoadPlugin(in_reg):
     in_reg.Major = 1
     in_reg.Minor = 0
 
-    in_reg.RegisterCommand("USDExport", "USDExport")
+    in_reg.RegisterCommand("USDExportCommand", "USDExportCommand")
     in_reg.RegisterCommand("USDExportOpen", "USDExportOpen")
+    in_reg.RegisterMenu(constants.siMenuMainFileExportID, "USD Export", False, False)
     # RegistrationInsertionPoint - do not remove this line
 
     return True
+
+
+def USDExport_Init(ctxt):
+    menu = ctxt.source
+    menu.AddCommandItem("USD file...", "USDExportOpen")
 
 
 def XSIUnloadPlugin(in_reg):
@@ -61,7 +67,7 @@ def XSIUnloadPlugin(in_reg):
     return true
 
 
-def USDExport_Init(in_ctxt):
+def USDExportCommand_Init(in_ctxt):
     command = in_ctxt.Source
     args = command.Arguments
     # init parameters of the command
@@ -77,9 +83,9 @@ def USDExport_Init(in_ctxt):
     return True
 
 
-def USDExport_Execute(*args):
+def USDExportCommand_Execute(*args):
     imp.reload(utils)
-    app.LogMessage("USDExport_Execute called", constants.siVerbose)
+    app.LogMessage("USDExportCommand_Execute called", constants.siVerbose)
     scene = app.ActiveProject2.ActiveScene
     # read arguments of the command
     file_path = args[0] if args[0] is not None and len(args[0]) > 0 else utils.from_scene_path_to_models_path(scene.Parameters("Filename").Value)
@@ -255,14 +261,14 @@ def USDExportOpen_Execute():
             attributes.append("edge_creases")
 
         objects = [o for o in app.Selection] if prop.Parameters("is_selection").Value else [app.ActiveProject2.ActiveScene.Root]
-        app.USDExport(prop.Parameters("file_path").Value,
-                      objects,
-                      (prop.Parameters("start_frame").Value, prop.Parameters("end_frame").Value) if prop.Parameters("is_animation").Value else None,
-                      objects_types,
-                      attributes,
-                      prop.Parameters("is_materials").Value,
-                      prop.Parameters("opt_subdiv").Value,
-                      prop.Parameters("opt_ignore_unknown").Value)
+        app.USDExportCommand(prop.Parameters("file_path").Value,
+                             objects,
+                             (prop.Parameters("start_frame").Value, prop.Parameters("end_frame").Value) if prop.Parameters("is_animation").Value else None,
+                             objects_types,
+                             attributes,
+                             prop.Parameters("is_materials").Value,
+                             prop.Parameters("opt_subdiv").Value,
+                             prop.Parameters("opt_ignore_unknown").Value)
 
     # delete dialog
     app.DeleteObj(prop)
