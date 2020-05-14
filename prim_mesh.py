@@ -204,7 +204,7 @@ def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_pri
                     UsdShade.MaterialBindingAPI(usd_subset).Bind(material_to_usd[mat_identifier])
 
 
-def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, root_path):
+def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, root_path, progress_bar=None):
     '''stage is a root stage
        mesh_object is a polygonmesh X3DObject
        root_path is a string for the parent path in the stage
@@ -245,6 +245,8 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
         set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
+            if progress_bar is not None:
+                progress_bar.Caption = utils.build_export_object_caption(mesh_object, frame)
             set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=frame)
     ref_stage.Save()
 

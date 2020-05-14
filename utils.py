@@ -1,4 +1,5 @@
 from pxr import UsdGeom, Gf
+import os
 
 
 # --------------------USD specific----------------------------
@@ -59,7 +60,22 @@ def build_material_identifier(material):
     return (material.Library.Name, material.Name)
 
 
+def build_export_object_caption(obj, frame=None):
+    return "Export object " + obj.Name + (" (frame " + str(frame) + ")" if frame is not None else "")
+
+
 # --------------------General----------------------------
+def from_scene_path_to_models_path(path):
+    path_head, path_tail = os.path.split(path)
+    # change last folder from Scene to Models
+    folders = path_head.split("\\")
+    models_path = "\\".join(folders[:-1]) + "\\Models\\"
+    # change extension in the file name
+    name_parts = path_tail.split(".")
+    file_name = ".".join(name_parts[:-1]) + ".usda"
+    return models_path + file_name
+
+
 def get_last_folder(path):
     parts = path.split("\\")
     return parts[-2]

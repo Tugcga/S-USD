@@ -46,7 +46,7 @@ def set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim, frame=None):
     set_curves_data(usd_curves, usd_curves_prim, data_points, list(xsi_length), xsi_width, frame)
 
 
-def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root_path):
+def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root_path, progress_bar=None):
     imp.reload(utils)
     imp.reload(prim_xform)
     imp.reload(materials)
@@ -61,6 +61,8 @@ def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root
         set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
+            if progress_bar is not None:
+                progress_bar.Caption = utils.build_export_object_caption(xsi_hair, frame)
             set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim, frame)
     ref_stage.Save()
 
@@ -94,7 +96,7 @@ def set_strands_at_frame(xsi_geometry, usd_curves, usd_curves_prim, frame=None):
     set_curves_data(usd_curves, usd_curves_prim, data_points, data_vertex_count, data_width, frame)
 
 
-def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, root_path):
+def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, root_path, progress_bar=None):
     imp.reload(utils)
     imp.reload(prim_xform)
     imp.reload(materials)
@@ -109,6 +111,8 @@ def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, roo
         set_strands_at_frame(xsi_pc.GetActivePrimitive3().Geometry, usd_curves, usd_curves_prim)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
+            if progress_bar is not None:
+                progress_bar.Caption = utils.build_export_object_caption(xsi_pc, frame)
             set_strands_at_frame(xsi_pc.GetActivePrimitive3(frame).GetGeometry3(frame), usd_curves, usd_curves_prim, frame)
     ref_stage.Save()
 

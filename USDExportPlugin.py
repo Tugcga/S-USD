@@ -10,6 +10,7 @@ import sys
 if __sipath__ not in sys.path:
     sys.path.append(__sipath__)
 import export_processor
+import utils
 import imp
 
 null = None
@@ -77,12 +78,13 @@ def USDExport_Init(in_ctxt):
 
 
 def USDExport_Execute(*args):
+    imp.reload(utils)
     app.LogMessage("USDExport_Execute called", constants.siVerbose)
+    scene = app.ActiveProject2.ActiveScene
     # read arguments of the command
-    file_path = args[0]
-    # objects_list = args[1] if args[1] is not None else [app.ActiveProject2.ActiveScene.Root]
-    objects_list = [app.ActiveProject2.ActiveScene.Root] if args[1] is None or len(args[1]) == 0 or (str(args[1]) == "Plugin Manager") else args[1]
-    animation = None  # args[2]  for test only
+    file_path = args[0] if args[0] is not None and len(args[0]) > 0 else utils.from_scene_path_to_models_path(scene.Parameters("Filename").Value)
+    objects_list = [scene.Root] if args[1] is None or len(args[1]) == 0 or (str(args[1]) == "Plugin Manager") else args[1]
+    animation = args[2]
     object_types = args[3] if args[3] is not None else ("strands", "hair", constants.siModelType, constants.siNullPrimType, constants.siPolyMeshType, constants.siLightPrimType, constants.siCameraPrimType, "pointcloud")  # for empty arg use full list of object types
     attr_list = args[4] if args[4] is not None else ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')  # for empty arg use full list of attributes
     is_materials = args[5] if args[5] is not None else True
@@ -98,7 +100,7 @@ def USDExport_Execute(*args):
               "materials": {"is_materials": is_materials}}
 
     imp.reload(export_processor)
-    export_processor.export(app, "D:\\Graphic\\For Softimage\\Projects\\USD Development\\Models\\test.usda", params)
+    export_processor.export(app, file_path, params, XSIUIToolkit)
 
     return True
 

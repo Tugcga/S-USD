@@ -32,7 +32,7 @@ def set_material(xsi_material, stage, usd_material):
     usd_material.CreateSurfaceOutput().ConnectToSource(usd_shader, "out")
 
 
-def export_materials(app, params, stage, materials_path):
+def export_materials(app, params, stage, materials_path, progress_bar=None):
     imp.reload(utils)
     # create new stage for materials
     materials_folder, materials_file_name = os.path.split(materials_path)
@@ -45,6 +45,8 @@ def export_materials(app, params, stage, materials_path):
         mat_stage.DefinePrim("/" + lib_name)
         # iterate by all materials inside the library
         for mat in library.Items:
+            if progress_bar is not None:
+                progress_bar.Caption = "Export material " + mat.Name + " (library " + lib_name + ")"
             mat_name = mat.Name
             # add material to usd
             usd_material = UsdShade.Material.Define(mat_stage, "/" + lib_name + "/" + mat_name)
