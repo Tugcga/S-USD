@@ -39,23 +39,24 @@ def export(app, file_path, params):
         is_materials = mats.get("is_materials", True)
 
     root_path = ""
-    materials_map = {}  # key - (library, material), value - usd material
+    materials_opt = {}  # some parameters of the exported materials
     materials_ref_path = None
     if is_materials:
-        materials_ref_path = materials.export_materials(app, params, stage, path_for_objects, root_path, materials_map)
-    materials_map["ref_path"] = materials_ref_path  # also add to this map for simplicity, (path to file, pointer path in usd)
+        materials_path = path_head + "\\" + utils.get_file_name(path_tail) + "_materials." + opts["extension"]
+        materials_ref_path = materials.export_materials(app, params, stage, materials_path)
+    materials_opt["ref_path"] = materials_ref_path  # this option is None if we does not export materials
 
     exported_objects = []  # store here ObjectID of exported objects
     if len(params["objects_list"]) == 1 and params["objects_list"][0].ObjectID == app.ActiveProject2.ActiveScene.Root.ObjectID:
         for obj in app.ActiveProject2.ActiveScene.Root.Children:
-            export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_map, root_path)
+            export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_opt, root_path)
     else:
         for obj in params["objects_list"]:
-            export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_map, root_path)
+            export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_opt, root_path)
     stage.Save()
 
 
-def export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_map, root_path):
+def export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_opt, root_path):
     opt_object_types = params.get("object_types", ())
     opt = params.get("options", {})
     obj_type = obj.Type
@@ -63,7 +64,7 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, mat
         usd_pointer = None
         if obj_type == constants.siPolyMeshType and obj_type in opt_object_types:
             # mesh
-            usd_pointer = prim_mesh.add_mesh(app, params, path_for_objects, stage, obj, materials_map, root_path)
+            usd_pointer = prim_mesh.add_mesh(app, params, path_for_objects, stage, obj, materials_opt, root_path)
         elif obj_type == constants.siCameraPrimType and obj_type in opt_object_types:
             # camera
             usd_pointer = prim_camera.add_camera(app, params, path_for_objects, stage, obj, root_path)
@@ -72,27 +73,27 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, mat
             usd_pointer = prim_light.add_light(app, params, path_for_objects, stage, obj, root_path)
         elif obj_type == "hair" and obj_type in opt_object_types:
             # xsi hair
-            usd_pointer = prim_hair.add_hair(app, params, path_for_objects, stage, obj, materials_map, root_path)
+            usd_pointer = prim_hair.add_hair(app, params, path_for_objects, stage, obj, materials_opt, root_path)
         elif obj_type == "pointcloud" and obj_type in opt_object_types and utils.is_stands(obj) and "strands" in opt_object_types:
             # strands hair
-            usd_pointer = prim_hair.add_strands(app, params, path_for_objects, stage, obj, materials_map, root_path)
+            usd_pointer = prim_hair.add_strands(app, params, path_for_objects, stage, obj, materials_opt, root_path)
         elif obj_type == "pointcloud" and obj_type in opt_object_types and not utils.is_stands(obj):
             # pointcloud
-            usd_pointer = prim_pointcloud.add_pointcloud(app, params, path_for_objects, stage, obj, materials_map, root_path)
+            usd_pointer = prim_pointcloud.add_pointcloud(app, params, path_for_objects, stage, obj, materials_opt, root_path)
         elif obj_type == constants.siModelType:
             # model
             master = obj.InstanceMaster
             if master is None:
                 # this is model
                 # for models does not go to it childrens, because all models export as separate usd-files
-                prim_model.add_model(app, params, path_for_objects, stage, obj, materials_map, root_path)
+                prim_model.add_model(app, params, path_for_objects, stage, obj, materials_opt, root_path)
                 exported_objects.append(obj.ObjectID)
             else:
                 # this is an instance of the model
                 master_id = master.ObjectID
                 if master_id not in exported_objects:
                     # master is not exported, do this
-                    prim_model.add_model(app, params, path_for_objects, stage, master, materials_map, root_path)
+                    prim_model.add_model(app, params, path_for_objects, stage, master, materials_opt, root_path)
                     exported_objects.append(master.ObjectID)
                 # next export the link of the instance
                 usd_model = stage.DefinePrim(root_path + "/" + obj.Name)
@@ -113,4 +114,4 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, mat
         if usd_pointer is not None:
             exported_objects.append(obj.ObjectID)
             for child in obj.Children:
-                export_step(app, params, path_for_objects, stage, child, exported_objects, materials_map, str(usd_pointer.GetPath()))
+                export_step(app, params, path_for_objects, stage, child, exported_objects, materials_opt, str(usd_pointer.GetPath()))

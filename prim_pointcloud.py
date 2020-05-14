@@ -1,5 +1,6 @@
 from pxr import UsdGeom, Usd, Sdf
 import prim_xform
+import materials
 import utils
 import imp
 
@@ -36,14 +37,26 @@ def set_pointcloud_at_frame(pointcloud_geometry, usd_pointcloud, usd_points_prim
         usd_extent.Set(utils.get_bounding_box(data_points), Usd.TimeCode(frame))
 
 
-def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, materials_map, root_path):
+def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, materials_opt, root_path):
     imp.reload(prim_xform)
+    imp.reload(materials)
     imp.reload(utils)
 
     opt_animation = params.get("animation", None)
     usd_xform, ref_stage = prim_xform.add_xform(app, params, path_for_objects, True, stage, pointcloud_object, root_path)
     usd_points = UsdGeom.Points.Define(ref_stage, str(usd_xform.GetPath()) + "/" + "Pointcloud")
     usd_points_prim = ref_stage.GetPrimAtPath(usd_points.GetPath())
+
+    # material
+    '''ref_path = materials_opt.get("ref_path", None)
+    if ref_path is not None:
+        xsi_mat = pointcloud_object.Material
+        mat_name = utils.buil_material_name(xsi_mat)
+        mat_ref = ref_stage.DefinePrim(str(usd_xform.GetPath()) + "/" + mat_name)
+        mat_ref.GetReferences().AddReference(ref_path, "/" + xsi_mat.Library.Name + "/" + xsi_mat.Name)
+        # bind the main material
+        UsdShade.MaterialBindingAPI(usd_points_prim).Bind(UsdShade.Material(ref_stage.GetPrimAtPath(mat_ref.GetPath())))'''
+    materials.add_material(materials_opt, pointcloud_object.Material, ref_stage, usd_xform, usd_points_prim)
 
     if opt_animation is None:
         set_pointcloud_at_frame(pointcloud_object.GetActivePrimitive3().Geometry, usd_points, usd_points_prim)

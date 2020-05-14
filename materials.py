@@ -1,6 +1,18 @@
 from pxr import Usd, UsdShade, Sdf
 import utils
 import imp
+import os
+
+
+def add_material(materials_opt, xsi_mat, stage, usd_xform, usd_prim, is_bind=True):  # do the same in prim_mesh
+    ref_path = materials_opt.get("ref_path", None)
+    if ref_path is not None:
+        mat_name = utils.buil_material_name(xsi_mat)
+        mat_ref = stage.DefinePrim(str(usd_xform.GetPath()) + "/" + mat_name)
+        mat_ref.GetReferences().AddReference(ref_path, "/" + xsi_mat.Library.Name + "/" + xsi_mat.Name)
+        # bind the main material
+        if is_bind:
+            UsdShade.MaterialBindingAPI(usd_prim).Bind(UsdShade.Material(stage.GetPrimAtPath(mat_ref.GetPath())))
 
 
 def set_material(xsi_material, stage, usd_material):
@@ -20,29 +32,24 @@ def set_material(xsi_material, stage, usd_material):
     usd_material.CreateSurfaceOutput().ConnectToSource(usd_shader, "out")
 
 
-def export_materials(app, params, stage, path_for_objects, root_path, materials_map):
+def export_materials(app, params, stage, materials_path):
     imp.reload(utils)
     # create new stage for materials
-    mats_stage_name = "materials." + utils.get_extension_from_params(params)
-    mat_stage = Usd.Stage.CreateNew(path_for_objects + mats_stage_name)
-    # add prim to it
-    mat_root = mat_stage.DefinePrim("/materials")
-    # and reference to it from the main stage
-    # ref = stage.DefinePrim(root_path + "/materials")
-    # ref.GetReferences().AddReference("./" + utils.get_last_folder(path_for_objects) + "/" + mats_stage_name, "/materials")
+    materials_folder, materials_file_name = os.path.split(materials_path)
+    mat_stage = Usd.Stage.CreateNew(materials_path)
 
     # we should iterate by libraries in the scene
     scene = app.ActiveProject2.ActiveScene
     for library in scene.MaterialLibraries:
         lib_name = library.Name
+        mat_stage.DefinePrim("/" + lib_name)
         # iterate by all materials inside the library
         for mat in library.Items:
             mat_name = mat.Name
             # add material to usd
-            usd_material = UsdShade.Material.Define(mat_stage, str(mat_root.GetPath()) + "/" + lib_name + "_" + mat_name)
-            materials_map[utils.build_material_identifier(mat)] = usd_material
+            usd_material = UsdShade.Material.Define(mat_stage, "/" + lib_name + "/" + mat_name)
             set_material(mat, mat_stage, usd_material)
 
     mat_stage.Save()
 
-    return ("./" + utils.get_last_folder(path_for_objects) + "/" + mats_stage_name, "/materials")
+    return "../" + materials_file_name
