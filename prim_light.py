@@ -86,3 +86,124 @@ def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # he
     ref_stage.Save()
 
     return usd_xform
+
+
+def set_color(usd_light, value, anim_opt):
+    usd_light.CreateColorAttr(value)
+
+
+def set_diffuse(usd_light, value, anim_opt):
+    usd_light.CreateDiffuseAttr(value)
+
+
+def set_specular(usd_light, value, anim_opt):
+    usd_light.CreateSpecularAttr(value)
+
+
+def set_intensity(usd_light, xsi_param, anim_opt):
+    attr = usd_light.CreateIntensityAttr()
+    if anim_opt is None:
+        attr.Set(xsi_param.Value)
+    else:
+        for frame in range(anim_opt[0], anim_opt[1] + 1):
+            attr.Set(xsi_param.GetValue(frame), Usd.TimeCode(frame))
+
+
+def set_distance_angle(usd_light, xsi_param, anim_opt):
+    attr = usd_light.CreateAngleAttr()
+    if anim_opt is None:
+        attr.Set(xsi_param.Value)
+    else:
+        for frame in range(anim_opt[0], anim_opt[1] + 1):
+            attr.Set(xsi_param.GetValue(frame), Usd.TimeCode(frame))
+
+
+def set_radius(usd_light, xsi_param, anim_opt):
+    attr = usd_light.CreateRadiusAttr()
+    if anim_opt is None:
+        attr.Set(xsi_param.Value)
+    else:
+        for frame in range(anim_opt[0], anim_opt[1] + 1):
+            attr.Set(xsi_param.GetValue(frame), Usd.TimeCode(frame))
+
+
+def set_ellipse_radius(usd_light, xsi_param_width, xsi_param_height, anim_opt):
+    attr = usd_light.CreateRadiusAttr()
+    if anim_opt is None:
+        attr.Set((xsi_param_width.Value + xsi_param_height.Value) / 2)
+    else:
+        for frame in range(anim_opt[0], anim_opt[1] + 1):
+            attr.Set((xsi_param_width.GetValue(frame) + xsi_param_height.GetValue(frame)) / 2, Usd.TimeCode(frame))
+
+
+def set_rect_size(usd_light, xsi_param_width, xsi_param_height, anim_opt):
+    attr_width = usd_light.CreateWidthAttr()
+    attr_heigh = usd_light.CreateHeightAttr()
+    if anim_opt is None:
+        attr_width.Set(xsi_param_width.Value)
+        attr_heigh.Set(xsi_param_height.Value)
+    else:
+        for frame in range(anim_opt[0], anim_opt[1] + 1):
+            attr_width.Set(xsi_param_width.GetValue(frame), Usd.TimeCode(frame))
+            attr_heigh.Set(xsi_param_height.GetValue(frame), Usd.TimeCode(frame))
+
+
+def add_cycles_light(app, params, path_for_objects, stage, cyc_light, materials_opt, root_path):
+    usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, cyc_light, root_path)
+    light_type = cyc_light.Type
+    usd_light = None
+    anim_opt = params.get("animation", None)
+    if light_type == "cyclesPoint":
+        usd_light = UsdLux.SphereLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + cyc_light.Name)
+        set_color(usd_light, (1.0, 1.0, 1.0), anim_opt)
+        set_diffuse(usd_light, 1.0, anim_opt)
+        set_specular(usd_light, 1.0, anim_opt)
+        set_intensity(usd_light, cyc_light.Parameters("power"), anim_opt)
+
+        set_radius(usd_light, cyc_light.Parameters("size"), anim_opt)
+    elif light_type == "cyclesSun":
+        usd_light = UsdLux.DistantLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + cyc_light.Name)
+        set_color(usd_light, (1.0, 1.0, 1.0), anim_opt)
+        set_diffuse(usd_light, 1.0, anim_opt)
+        set_specular(usd_light, 1.0, anim_opt)
+        set_intensity(usd_light, cyc_light.Parameters("power"), anim_opt)
+
+        set_distance_angle(usd_light, cyc_light.Parameters("angle"), anim_opt)
+    elif light_type == "cyclesSpot":
+        # spot light is not supported by usd
+        pass
+    elif light_type == "cyclesArea":
+        xsi_portal = cyc_light.Parameters("is_portal")
+        if xsi_portal is not None and xsi_portal.Value:
+            usd_light = UsdLux.LightPortal.Define(ref_stage, str(usd_xform.GetPath()) + "/" + cyc_light.Name)
+        else:
+            xsi_shape = cyc_light.Parameters("shape")
+            if xsi_shape is not None:
+                xsi_shape_value = xsi_shape.Value
+                if xsi_shape_value < 0.5:
+                    usd_light = UsdLux.RectLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + cyc_light.Name)
+                    set_color(usd_light, (1.0, 1.0, 1.0), anim_opt)
+                    set_diffuse(usd_light, 1.0, anim_opt)
+                    set_specular(usd_light, 1.0, anim_opt)
+                    set_intensity(usd_light, cyc_light.Parameters("power"), anim_opt)
+
+                    set_rect_size(usd_light, cyc_light.Parameters("sizeU"), cyc_light.Parameters("sizeV"), anim_opt)
+                else:
+                    usd_light = UsdLux.DiskLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + cyc_light.Name)
+                    set_color(usd_light, (1.0, 1.0, 1.0), anim_opt)
+                    set_diffuse(usd_light, 1.0, anim_opt)
+                    set_specular(usd_light, 1.0, anim_opt)
+                    set_intensity(usd_light, cyc_light.Parameters("power"), anim_opt)
+
+                    set_ellipse_radius(usd_light, cyc_light.Parameters("sizeU"), cyc_light.Parameters("sizeV"), anim_opt)
+    elif light_type == "cyclesBackground":
+        usd_light = UsdLux.DomeLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + cyc_light.Name)
+        set_color(usd_light, (1.0, 1.0, 1.0), anim_opt)
+        set_diffuse(usd_light, 1.0, anim_opt)
+        set_specular(usd_light, 1.0, anim_opt)
+
+    if usd_light is not None:
+        usd_light_prim = ref_stage.GetPrimAtPath(usd_light.GetPath())
+        materials.add_material(materials_opt, cyc_light.Material, ref_stage, ref_stage_asset, usd_xform, usd_light_prim)
+
+    return usd_xform

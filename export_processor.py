@@ -112,6 +112,9 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, mat
         elif (obj_type == constants.siNullPrimType or obj_type == "CameraRoot") and constants.siNullPrimType in opt_object_types:
             # null
             usd_pointer, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, False, stage, obj, root_path)
+        elif obj_type in ["cyclesPoint", "cyclesSun", "cyclesSpot", "cyclesArea", "cyclesBackground"]:
+            # cycles light
+            usd_pointer = prim_light.add_cycles_light(app, params, path_for_objects, stage, obj, materials_opt, root_path)
         else:
             if obj_type != "CameraInterest":  # camera interest can be recteated from cameta transform and focus distance
                 if not opt.get("ignore_unknown", True):
