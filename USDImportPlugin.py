@@ -28,7 +28,7 @@ def XSILoadPlugin(in_reg):
     in_reg.Major = 1
     in_reg.Minor = 0
 
-    in_reg.RegisterCommand("USDImport", "USDImport")
+    in_reg.RegisterCommand("USDImportCommand", "USDImportCommand")
     in_reg.RegisterCommand("USDImportOpen", "USDImportOpen")
     # RegistrationInsertionPoint - do not remove this line
 
@@ -41,22 +41,35 @@ def XSIUnloadPlugin(in_reg):
     return true
 
 
-def USDImport_Init(in_ctxt):
+def USDImportCommand_Init(in_ctxt):
     command = in_ctxt.Source
     args = command.Arguments
     # init parameters of the command
     args.Add("file_path")
+    args.Add("attributes")
+    args.Add("object_types")
+    args.Add("clear_scene")
+    args.Add("is_materials")
 
     return True
 
 
-def USDImport_Execute(*args):
+def USDImportCommand_Execute(*args):
     app.LogMessage("USDImport_Execute called", constants.siVerbose)
     # read arguments of the command
-    file_path = args[0]
+    file_path = args[0] if args[0] is not None else "D:\\Graphic\\For Softimage\\Projects\\USD Development\\Models\\test.usda"
+    attributes = args[1] if args[1] is not None else ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')
+    object_types = args[2] if args[2] is not None else ("strands", constants.siModelType, constants.siNullPrimType, constants.siPolyMeshType, constants.siLightPrimType, constants.siCameraPrimType, "pointcloud")
+    clear_scene = args[3] if args[3] is not None else True
+    is_materials = args[4] if args[4] is not None else True
+
+    import_options = {"clear_scene": clear_scene,
+                      "is_materials": is_materials,
+                      "attributes": attributes,
+                      "object_types": object_types}
 
     imp.reload(import_processor)
-    import_processor.import_usd(app, "D:\\Graphic\\For Softimage\\Projects\\USD Development\\Models\\test.usda")
+    import_processor.import_usd(app, file_path, import_options)
 
     return True
 
@@ -69,19 +82,133 @@ def USDImportOpen_Execute():
 
     # add parameters
     prop.AddParameter3("file_path", constants.siString, "", "", "", False, False)
+    param = prop.AddParameter3("clear_scene", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("materials", constants.siBool, True)
+    param.Animatable = False
+
+    param = prop.AddParameter3("is_polymesh", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_lights", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_cameras", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_strands", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_pointclouds", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_nulls", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_models", constants.siBool, True)
+    param.Animatable = False
+
+    param = prop.AddParameter3("is_uv_maps", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_normals", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_weightmaps", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_clusters", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_vertex_creases", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_edge_creases", constants.siBool, True)
+    param.Animatable = False
+    param = prop.AddParameter3("is_vertex_color", constants.siBool, True)
+    param.Animatable = False
 
     # define layout
     layout = prop.PPGLayout
     layout.Clear()
+    layout.AddGroup("File Path")
     item = layout.AddItem("file_path", "File", constants.siControlFilePath)
     item.SetAttribute(constants.siUIOpenFile, True)
     item.SetAttribute(constants.siUIFileMustExist, False)
     filter_string = "USD files (*.usd *.usdc *.usda *.usdz)|*.usd:*.usdc:*.usda:*.usdz|"
     item.SetAttribute(constants.siUIFileFilter, filter_string)
+    layout.EndGroup()
+
+    layout.AddGroup("Objects to Import")
+    layout.AddRow()
+    layout.AddItem("is_nulls", "Null")
+    layout.AddItem("is_polymesh", "Polygon Mesh")
+    layout.AddItem("is_lights", "Lights")
+    layout.EndRow()
+    layout.AddRow()
+    layout.AddItem("is_cameras", "Cameras")
+    layout.AddItem("is_strands", "Strands")
+    layout.AddItem("is_pointclouds", "Pointclouds")
+    layout.EndRow()
+    layout.AddRow()
+    layout.AddItem("is_models", "Model")
+    layout.AddSpacer()
+    layout.AddSpacer()
+    layout.EndRow()
+    layout.EndGroup()
+
+    layout.AddGroup("Mesh Attributes")
+    layout.AddRow()
+    layout.AddItem("is_uv_maps", "UV Map")
+    layout.AddItem("is_normals", "Normals")
+    layout.AddItem("is_vertex_color", "Vertex Color")
+    layout.EndRow()
+    layout.AddRow()
+    layout.AddItem("is_weightmaps", "Weightmaps")
+    layout.AddItem("is_clusters", "Polygon Clusters")
+    layout.AddItem("is_vertex_creases", "Vertex Creases")
+    layout.EndRow()
+    layout.AddRow()
+    layout.AddItem("is_edge_creases", "Edge Creases")
+    layout.AddSpacer()
+    layout.AddSpacer()
+    layout.EndRow()
+    layout.EndGroup()
+
+    layout.AddGroup("Options")
+    layout.AddItem("clear_scene", "Clear Scene")
+    layout.AddItem("materials", "Assign Imported Materials")
+    layout.EndGroup()
+
     rtn = app.InspectObj(prop, "", "Import *.usd file...", constants.siModal, False)
     if rtn is False:
+        objects_types = []
+        if prop.Parameters("is_nulls").Value:
+            objects_types.append(constants.siNullPrimType)
+        if prop.Parameters("is_polymesh").Value:
+            objects_types.append(constants.siPolyMeshType)
+        if prop.Parameters("is_lights").Value:
+            objects_types.append(constants.siLightPrimType)
+        if prop.Parameters("is_cameras").Value:
+            objects_types.append(constants.siCameraPrimType)
+        if prop.Parameters("is_strands").Value:
+            objects_types.append("strands")
+        if prop.Parameters("is_pointclouds").Value:
+            objects_types.append("pointcloud")
+        if prop.Parameters("is_models").Value:
+            objects_types.append(constants.siModelType)
+
+        attributes = []
+        if prop.Parameters("is_uv_maps").Value:
+            attributes.append("uvmap")
+        if prop.Parameters("is_normals").Value:
+            attributes.append("normal")
+        if prop.Parameters("is_vertex_color").Value:
+            attributes.append("color")
+        if prop.Parameters("is_weightmaps").Value:
+            attributes.append("weightmap")
+        if prop.Parameters("is_clusters").Value:
+            attributes.append("cluster")
+        if prop.Parameters("is_vertex_creases").Value:
+            attributes.append("vertex_creases")
+        if prop.Parameters("is_edge_creases").Value:
+            attributes.append("edge_creases")
+
         # click "ok", execute import command
-        app.USDImport(prop.Parameters("file_path").Value)
+        app.USDImportCommand(prop.Parameters("file_path").Value,
+                             attributes,
+                             objects_types,
+                             prop.Parameters("clear_scene").Value,
+                             prop.Parameters("materials").Value)
 
     # delete dialog
     app.DeleteObj(prop)

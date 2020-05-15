@@ -12,7 +12,7 @@ Copy files from the repository to the /Application/Plugins folder inside any wor
 
 # What can be exported from Softimage
 
-1. Polygon meshes. Each polygon mesh store the following attributes:
+1. Polygon meshes. All non-transform animation of the mesh is backed into vertices positions. If during the animation the topology of the mesh is not changed, then only vertex positions stored in different time samples. In other case, polygon indexes are also saved for each time sample. Each polygon mesh store the following attributes:
 
 - vertices and polygons
 

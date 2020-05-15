@@ -197,7 +197,7 @@ def USDExportOpen_Execute():
     layout.AddItem("end_frame", "End Frame")
     layout.EndGroup()
 
-    layout.AddGroup("Attributes")
+    layout.AddGroup("Mesh Attributes")
     layout.AddRow()
     layout.AddItem("is_uv_maps", "UV Map")
     layout.AddItem("is_normals", "Normals")
@@ -244,6 +244,7 @@ def USDExportOpen_Execute():
             objects_types.append("pointcloud")
         if prop.Parameters("is_models").Value:
             objects_types.append(constants.siModelType)
+
         attributes = []
         if prop.Parameters("is_uv_maps").Value:
             attributes.append("uvmap")
