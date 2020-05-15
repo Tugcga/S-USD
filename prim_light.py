@@ -1,5 +1,7 @@
-from pxr import Usd, UsdLux
+from pxr import Usd, UsdLux, UsdShade
 from prim_xform import add_xform
+import materials
+import imp
 
 
 def set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame=None):
@@ -25,6 +27,7 @@ def set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, fram
 
 
 def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # here me add only basic parameters, all other will be defined in the material
+    imp.reload(materials)
     # basic transform
     usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, xsi_light, root_path)
     # get the type of the light
@@ -47,6 +50,18 @@ def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # he
         usd_light = UsdLux.DistantLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
     elif xsi_light_type == 2:  # spot
         usd_light = UsdLux.DistantLight.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_light.Name)
+
+    # export light shader to material
+    materials_opt = params.get("materials", None)
+    if materials_opt is not None:
+        is_materials = materials_opt.get("is_materials", True)
+        if is_materials:
+            usd_material = UsdShade.Material.Define(ref_stage, str(usd_xform.GetPath()) + "/Shader")
+            xsi_root_shader = xsi_light.Parameters("LightShader")
+            if xsi_root_shader is not None:
+                materials.set_material_complete(xsi_root_shader, ref_stage, usd_material)
+            # bind shader to the light
+            UsdShade.MaterialBindingAPI(usd_light).Bind(usd_material)
 
     if usd_light is not None:
         # set neutral color

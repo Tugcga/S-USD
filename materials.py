@@ -33,6 +33,10 @@ def set_material(xsi_material, stage, usd_material):
     usd_material.CreateSurfaceOutput().ConnectToSource(usd_shader, "out")
 
 
+def set_material_complete(root_shader, stage, usd_material):
+    pass
+
+
 def export_materials(app, params, stage, materials_path, progress_bar=None):
     imp.reload(utils)
     # create new stage for materials
