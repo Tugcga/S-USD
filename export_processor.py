@@ -44,11 +44,11 @@ def export(app, file_path, params, xsi_toolkit):
 
     root_path = ""
     materials_opt = {}  # some parameters of the exported materials
-    materials_ref_path = None
+    material_asset_path = None
     if is_materials:
         materials_path = path_head + "\\" + utils.get_file_name(path_tail) + "_materials." + opts["extension"]
-        materials_ref_path = materials.export_materials(app, params, stage, materials_path, progress_bar)
-    materials_opt["ref_path"] = materials_ref_path  # this option is None if we does not export materials
+        material_asset_path = materials.export_materials(app, params, stage, materials_path, progress_bar)
+    materials_opt["asset_path"] = material_asset_path
 
     exported_objects = []  # store here ObjectID of exported objects
     if len(params["objects_list"]) == 1 and params["objects_list"][0].ObjectID == app.ActiveProject2.ActiveScene.Root.ObjectID:
@@ -111,13 +111,13 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, mat
 
         elif (obj_type == constants.siNullPrimType or obj_type == "CameraRoot") and constants.siNullPrimType in opt_object_types:
             # null
-            usd_pointer, ref_stage = prim_xform.add_xform(app, params, path_for_objects, False, stage, obj, root_path)
+            usd_pointer, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, False, stage, obj, root_path)
         else:
             if obj_type != "CameraInterest":  # camera interest can be recteated from cameta transform and focus distance
                 if not opt.get("ignore_unknown", True):
                     # all unsupported object are nulls, so they are Xforms
                     print("Unknown object " + obj_type + ". Degrade to xform")
-                    usd_pointer, ref_stage = prim_xform.add_xform(app, params, path_for_objects, False, stage, obj, root_path)
+                    usd_pointer, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, False, stage, obj, root_path)
         # continue recirsive process
         if usd_pointer is not None:
             exported_objects.append(obj.ObjectID)

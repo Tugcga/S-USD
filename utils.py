@@ -136,3 +136,22 @@ def get_extension_from_params(params):
         return "usd"
     else:
         return opts.get("extension", "usd")
+
+
+def verify_extension(file_path):
+    path_head, path_tail = os.path.split(file_path)
+    point_index = path_tail.rfind(".")
+    if point_index < 0:
+        return file_path + ".usda"
+    else:
+        file_ext = path_tail[point_index + 1:]
+        if file_ext in ["usd", "usda", "usdz"]:
+            return file_path
+        else:
+            return path_head + "\\" + path_tail[:point_index] + ".usda"
+
+
+def transform_path_to_relative(path, base_path):
+    '''transform absolute path to relative with respect to base_path
+    '''
+    return os.path.relpath(base_path, path)[3:]

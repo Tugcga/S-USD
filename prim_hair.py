@@ -50,11 +50,11 @@ def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root
     imp.reload(utils)
     imp.reload(prim_xform)
     imp.reload(materials)
-    usd_xform, ref_stage = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_hair, root_path)
+    usd_xform, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_hair, root_path)
     usd_curves = UsdGeom.BasisCurves.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_hair.Name)
     usd_curves_prim = ref_stage.GetPrimAtPath(usd_curves.GetPath())
 
-    materials.add_material(materials_opt, xsi_hair.Material, ref_stage, usd_xform, usd_curves_prim)
+    materials.add_material(materials_opt, xsi_hair.Material, ref_stage, ref_stage_asset, usd_xform, usd_curves_prim)
 
     opt_animation = params.get("animation", None)
     if opt_animation is None:
@@ -100,11 +100,11 @@ def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, roo
     imp.reload(utils)
     imp.reload(prim_xform)
     imp.reload(materials)
-    usd_xform, ref_stage = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_pc, root_path)
+    usd_xform, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_pc, root_path)
     usd_curves = UsdGeom.BasisCurves.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_pc.Name)
     usd_curves_prim = ref_stage.GetPrimAtPath(usd_curves.GetPath())
 
-    materials.add_material(materials_opt, xsi_pc.Material, ref_stage, usd_xform, usd_curves_prim)
+    materials.add_material(materials_opt, xsi_pc.Material, ref_stage, ref_stage_asset, usd_xform, usd_curves_prim)
 
     opt_animation = params.get("animation", None)
     if opt_animation is None:

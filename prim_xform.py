@@ -19,7 +19,8 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
     xsi_vis_prop = obj.Properties("Visibility")
     if create_ref:
         new_stage_name = obj.FullName + "." + utils.get_extension_from_params(params)
-        new_stage = Usd.Stage.CreateNew(path_for_objects + new_stage_name)
+        stage_asset_path = path_for_objects + new_stage_name
+        new_stage = Usd.Stage.CreateNew(stage_asset_path)
         utils.add_stage_metadata(new_stage, params)
 
         # add dfault root xform node for this new stage
@@ -39,6 +40,6 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
         add_transform_to_xfo(usd_xform, obj, opt_animation)
 
     if create_ref:
-        return usd_xform, new_stage
+        return usd_xform, new_stage, stage_asset_path
     else:
-        return usd_xform, None
+        return usd_xform, None, None

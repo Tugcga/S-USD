@@ -4,12 +4,13 @@ import imp
 import os
 
 
-def add_material(materials_opt, xsi_mat, stage, usd_xform, usd_prim, is_bind=True):  # do the same in prim_mesh
-    ref_path = materials_opt.get("ref_path", None)
-    if ref_path is not None:
+def add_material(materials_opt, xsi_mat, stage, stage_asset_path, usd_xform, usd_prim, is_bind=True):  # do the same in prim_mesh
+    material_asset_path = materials_opt.get("asset_path", None)
+    if material_asset_path is not None:
+        rel_material_path = utils.transform_path_to_relative(stage_asset_path, material_asset_path)
         mat_name = utils.buil_material_name(xsi_mat)
         mat_ref = stage.DefinePrim(str(usd_xform.GetPath()) + "/" + mat_name)
-        mat_ref.GetReferences().AddReference(ref_path, "/" + xsi_mat.Library.Name + "/" + xsi_mat.Name)
+        mat_ref.GetReferences().AddReference(rel_material_path, "/" + xsi_mat.Library.Name + "/" + xsi_mat.Name)
         # bind the main material
         if is_bind:
             UsdShade.MaterialBindingAPI(usd_prim).Bind(UsdShade.Material(stage.GetPrimAtPath(mat_ref.GetPath())))
@@ -54,4 +55,4 @@ def export_materials(app, params, stage, materials_path, progress_bar=None):
 
     mat_stage.Save()
 
-    return "../" + materials_file_name
+    return materials_path

@@ -43,11 +43,11 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
     imp.reload(utils)
 
     opt_animation = params.get("animation", None)
-    usd_xform, ref_stage = prim_xform.add_xform(app, params, path_for_objects, True, stage, pointcloud_object, root_path)
+    usd_xform, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, True, stage, pointcloud_object, root_path)
     usd_points = UsdGeom.Points.Define(ref_stage, str(usd_xform.GetPath()) + "/" + "Pointcloud")
     usd_points_prim = ref_stage.GetPrimAtPath(usd_points.GetPath())
 
-    materials.add_material(materials_opt, pointcloud_object.Material, ref_stage, usd_xform, usd_points_prim)
+    materials.add_material(materials_opt, pointcloud_object.Material, ref_stage, ref_stage_asset, usd_xform, usd_points_prim)
 
     if opt_animation is None:
         set_pointcloud_at_frame(pointcloud_object.GetActivePrimitive3().Geometry, usd_points, usd_points_prim)

@@ -22,7 +22,7 @@ def set_camera_at_frame(xsi_camera, usd_camera, frame=None):
 
 
 def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
-    usd_xform, ref_stage = add_xform(app, params, path_for_objects, True, stage, xsi_camera, root_path)
+    usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, xsi_camera, root_path)
     usd_camera = UsdGeom.Camera.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_camera.Name)
     # set time independent attributes
     # perspective or ortographic
