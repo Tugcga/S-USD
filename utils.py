@@ -20,6 +20,11 @@ def build_transform(obj, frame=None):
         )
 
 
+def is_contains_transform(usd_prim):
+    usd_props = usd_prim.GetPropertyNames()
+    return "xformOp:transform" in usd_props
+
+
 # --------------------XSI specific----------------------------
 def is_stands(pc_object):
     pc_geo = pc_object.GetActivePrimitive2().Geometry
@@ -62,6 +67,27 @@ def build_material_identifier(material):
 
 def build_export_object_caption(obj, frame=None):
     return "Export object " + obj.Name + (" (frame " + str(frame) + ")" if frame is not None else "")
+
+
+def set_xsi_transform(xsi_obj, usd_tfm):
+    tfm_matrix = xsi_obj.Kinematics.Local.Transform.Matrix4
+    row_00 = usd_tfm.GetRow(0)
+    row_01 = usd_tfm.GetRow(1)
+    row_02 = usd_tfm.GetRow(2)
+    row_03 = usd_tfm.GetRow(3)
+    new_transfrom = xsi_obj.Kinematics.Local.Transform
+    tfm_matrix.Set(row_00[0], row_00[1], row_00[2], row_00[3],
+                   row_01[0], row_01[1], row_01[2], row_01[3],
+                   row_02[0], row_02[1], row_02[2], row_02[3],
+                   row_03[0], row_03[1], row_03[2], row_03[3])
+    new_transfrom.SetMatrix4(tfm_matrix)
+    xsi_obj.Kinematics.Local.Transform = new_transfrom
+
+
+def set_xsi_visibility(xsi_obj, is_visible):
+    vis_prop = xsi_obj.Properties("Visibility")
+    vis_prop.Parameters("viewvis").Value = is_visible
+    vis_prop.Parameters("rendvis").Value = is_visible
 
 
 # --------------------General----------------------------

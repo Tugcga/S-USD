@@ -85,7 +85,7 @@ def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # he
                 set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame)
     ref_stage.Save()
 
-    return usd_xform
+    return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
 
 
 def set_color(usd_light, value, anim_opt):
@@ -206,4 +206,4 @@ def add_cycles_light(app, params, path_for_objects, stage, cyc_light, materials_
         usd_light_prim = ref_stage.GetPrimAtPath(usd_light.GetPath())
         materials.add_material(materials_opt, cyc_light.Material, ref_stage, ref_stage_asset, usd_xform, usd_light_prim)
 
-    return usd_xform
+    return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))

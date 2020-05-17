@@ -251,4 +251,46 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
             set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=frame)
     ref_stage.Save()
 
-    return usd_xform
+    return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
+
+
+def set_geometry(xsi_geometry, usd_points, usd_face_counts, usd_face_indexes):
+    # build polygons data
+    polygons = []
+    index = 0
+    usd_face_counts_array = usd_face_counts.Get()
+    usd_face_indexes_array = usd_face_indexes.Get()
+    for f in usd_face_counts_array:
+        polygons.append(f)
+        for i in range(f):
+            polygons.append(usd_face_indexes_array[index])
+            index += 1
+    # next convert point positions
+    usd_points_array = usd_points.Get()
+    vertices_x = []
+    vertices_y = []
+    vertices_z = []
+    for v in usd_points_array:
+        vertices_x.append(v[0])
+        vertices_y.append(v[1])
+        vertices_z.append(v[2])
+    xsi_geometry.Set([vertices_x, vertices_y, vertices_z], polygons)
+
+
+def emit_mesh(app, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent):
+    imp.reload(utils)
+    xsi_mesh = app.GetPrim("EmptyPolygonMesh", mesh_name, xsi_parent)
+    utils.set_xsi_transform(xsi_mesh, usd_tfm)
+    utils.set_xsi_visibility(xsi_mesh, visibility)
+    xsi_geometry = xsi_mesh.ActivePrimitive.Geometry
+
+    # build geometry
+    usd_props = usd_prim.GetPropertyNames()
+    if "points" in usd_props and "faceVertexCounts" in usd_props and "faceVertexIndices":
+        # these are minimal data for the mesh
+        usd_points = usd_prim.GetProperty("points")
+        usd_face_counts = usd_prim.GetProperty("faceVertexCounts")
+        usd_face_indexes = usd_prim.GetProperty("faceVertexIndices")
+        set_geometry(xsi_geometry, usd_points, usd_face_counts, usd_face_indexes)
+
+    return xsi_mesh

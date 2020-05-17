@@ -55,4 +55,4 @@ def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
             set_camera_at_frame(xsi_camera, usd_camera, frame)
     ref_stage.Save()
 
-    return usd_xform
+    return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))

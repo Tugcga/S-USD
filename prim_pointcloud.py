@@ -57,4 +57,4 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
                 progress_bar.Caption = utils.build_export_object_caption(pointcloud_object, frame)
             set_pointcloud_at_frame(pointcloud_object.GetActivePrimitive3(frame).GetGeometry3(frame), usd_points, usd_points_prim, frame=frame)
 
-    return usd_xform
+    return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))

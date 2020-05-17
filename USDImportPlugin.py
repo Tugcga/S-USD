@@ -7,6 +7,7 @@
 import win32com.client
 from win32com.client import constants
 import sys
+import os
 if __sipath__ not in sys.path:
     sys.path.append(__sipath__)
 import import_processor
@@ -69,7 +70,10 @@ def USDImportCommand_Execute(*args):
                       "object_types": object_types}
 
     imp.reload(import_processor)
-    import_processor.import_usd(app, file_path, import_options)
+    if os.path.isfile(file_path):
+        import_processor.import_usd(app, file_path, import_options)
+    else:
+        app.LogMessage("Select an *.usd file", constants.siWarning)
 
     return True
 

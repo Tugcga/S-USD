@@ -43,3 +43,22 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
         return usd_xform, new_stage, stage_asset_path
     else:
         return usd_xform, None, None
+
+
+def get_transform(usd_item):
+    usd_xform = UsdGeom.Xformable(usd_item)
+    usd_transform = usd_xform.GetLocalTransformation()
+    return usd_transform
+
+
+def get_visibility(usd_item):
+    usd_xform = UsdGeom.Xformable(usd_item)
+    vis_attr = usd_xform.ComputeVisibility()
+    return vis_attr == "inherited"
+
+
+def emit_null(app, null_name, usd_tfm, visibility, usd_prim, xsi_parent):
+    xsi_null = app.GetPrim("Null", null_name, xsi_parent)
+    utils.set_xsi_transform(xsi_null, usd_tfm)
+    utils.set_xsi_visibility(xsi_null, visibility)
+    return xsi_null

@@ -66,7 +66,7 @@ def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root
             set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim, frame)
     ref_stage.Save()
 
-    return usd_xform
+    return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
 
 
 def set_strands_at_frame(xsi_geometry, usd_curves, usd_curves_prim, frame=None):
@@ -116,4 +116,4 @@ def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, roo
             set_strands_at_frame(xsi_pc.GetActivePrimitive3(frame).GetGeometry3(frame), usd_curves, usd_curves_prim, frame)
     ref_stage.Save()
 
-    return usd_xform
+    return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
