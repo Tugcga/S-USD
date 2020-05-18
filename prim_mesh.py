@@ -270,27 +270,29 @@ def set_geometry(xsi_geometry, usd_points, usd_face_counts, usd_face_indexes):
     vertices_x = []
     vertices_y = []
     vertices_z = []
-    for v in usd_points_array:
+    print(polygons)
+    '''for v in usd_points_array:
         vertices_x.append(v[0])
         vertices_y.append(v[1])
-        vertices_z.append(v[2])
-    xsi_geometry.Set([vertices_x, vertices_y, vertices_z], polygons)
+        vertices_z.append(v[2])'''
+    # xsi_geometry.Set([vertices_x, vertices_y, vertices_z], polygons)
 
 
 def emit_mesh(app, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent):
     imp.reload(utils)
+    usd_mesh = UsdGeom.Mesh(usd_prim)
     xsi_mesh = app.GetPrim("EmptyPolygonMesh", mesh_name, xsi_parent)
-    utils.set_xsi_transform(xsi_mesh, usd_tfm)
+    utils.set_xsi_transform(app, xsi_mesh, usd_tfm)
     utils.set_xsi_visibility(xsi_mesh, visibility)
     xsi_geometry = xsi_mesh.ActivePrimitive.Geometry
 
     # build geometry
-    usd_props = usd_prim.GetPropertyNames()
+    '''usd_props = usd_prim.GetPropertyNames()
     if "points" in usd_props and "faceVertexCounts" in usd_props and "faceVertexIndices":
         # these are minimal data for the mesh
         usd_points = usd_prim.GetProperty("points")
         usd_face_counts = usd_prim.GetProperty("faceVertexCounts")
         usd_face_indexes = usd_prim.GetProperty("faceVertexIndices")
-        set_geometry(xsi_geometry, usd_points, usd_face_counts, usd_face_indexes)
+        set_geometry(xsi_geometry, usd_points, usd_face_counts, usd_face_indexes)'''
 
     return xsi_mesh

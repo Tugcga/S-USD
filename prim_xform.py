@@ -12,11 +12,16 @@ def add_transform_to_xfo(usd_xform, obj, opt_anim):
             usd_tfm.Set(utils.build_transform(obj, frame), Usd.TimeCode(frame))
 
 
+def add_visibility_to_xfo(usd_xform, xsi_obj):
+    xsi_vis_prop = xsi_obj.Properties("Visibility")
+    usd_xform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
+
+
 def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, is_instance=False):
     imp.reload(utils)
     # we should create a new stage and reference the old one to this new
     opt_animation = params.get("animation", None)
-    xsi_vis_prop = obj.Properties("Visibility")
+    # xsi_vis_prop = obj.Properties("Visibility")
     if create_ref:
         new_stage_name = obj.FullName + "." + utils.get_extension_from_params(params)
         stage_asset_path = path_for_objects + new_stage_name
@@ -31,10 +36,12 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, 
         if is_instance:
             ref.SetInstanceable(True)
         refXform = UsdGeom.Xformable(ref)
-        refXform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
+        add_visibility_to_xfo(refXform, obj)
+        # refXform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
     else:
         usd_xform = UsdGeom.Xform.Define(stage, root_path + "/" + obj.Name)
-        usd_xform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
+        add_visibility_to_xfo(usd_xform, obj)
+        # usd_xform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
 
     if create_ref:
         add_transform_to_xfo(refXform, obj, opt_animation)
@@ -49,8 +56,12 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, 
 
 def get_transform(usd_item):
     usd_xform = UsdGeom.Xformable(usd_item)
-    usd_transform = usd_xform.GetLocalTransformation()
-    return usd_transform
+    times_array = usd_xform.GetTimeSamples()  # array of time samples, it empty if no animation
+    if len(times_array) == 0:
+        usd_transform = usd_xform.GetLocalTransformation()
+    else:
+        usd_transform = [usd_xform.GetLocalTransformation(t) for t in times_array]
+    return (usd_transform, times_array)
 
 
 def get_visibility(usd_item):

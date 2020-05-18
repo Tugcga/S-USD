@@ -69,22 +69,52 @@ def build_export_object_caption(obj, frame=None):
     return "Export object " + obj.Name + (" (frame " + str(frame) + ")" if frame is not None else "")
 
 
-def set_xsi_transform(xsi_obj, usd_tfm):
-    tfm_matrix = xsi_obj.Kinematics.Local.Transform.Matrix4
+def set_xsi_transform_at_frame(app, xsi_object, usd_tfm, frame=None):
+    # set tfm matrix
+    tfm_matrix = xsi_object.Kinematics.Local.Transform.Matrix4
     row_00 = usd_tfm.GetRow(0)
     row_01 = usd_tfm.GetRow(1)
     row_02 = usd_tfm.GetRow(2)
     row_03 = usd_tfm.GetRow(3)
-    new_transfrom = xsi_obj.Kinematics.Local.Transform
     tfm_matrix.Set(row_00[0], row_00[1], row_00[2], row_00[3],
                    row_01[0], row_01[1], row_01[2], row_01[3],
                    row_02[0], row_02[1], row_02[2], row_02[3],
                    row_03[0], row_03[1], row_03[2], row_03[3])
+    # form transform
+    new_transfrom = xsi_object.Kinematics.Local.Transform
     new_transfrom.SetMatrix4(tfm_matrix)
-    xsi_obj.Kinematics.Local.Transform = new_transfrom
+    # apply transform
+    xsi_object.Kinematics.Local.Transform = new_transfrom
+    if frame is not None:
+        xsi_translation = new_transfrom.Translation
+        xsi_rotation = new_transfrom.Rotation.XYZAngles
+        xsi_scale = new_transfrom.Scaling
+        # set keys
+        app.SaveKey(xsi_object.Name + ".kine.local.posx", frame, xsi_translation.X)
+        app.SaveKey(xsi_object.Name + ".kine.local.posy", frame, xsi_translation.Y)
+        app.SaveKey(xsi_object.Name + ".kine.local.posz", frame, xsi_translation.Z)
+        app.SaveKey(xsi_object.Name + ".kine.local.rotx", frame, xsi_rotation.X * 180.0 / 3.14)
+        app.SaveKey(xsi_object.Name + ".kine.local.roty", frame, xsi_rotation.Y * 180.0 / 3.14)
+        app.SaveKey(xsi_object.Name + ".kine.local.rotz", frame, xsi_rotation.Z * 180.0 / 3.14)
+        app.SaveKey(xsi_object.Name + ".kine.local.sclx", frame, xsi_scale.X)
+        app.SaveKey(xsi_object.Name + ".kine.local.scly", frame, xsi_scale.Y)
+        app.SaveKey(xsi_object.Name + ".kine.local.sclz", frame, xsi_scale.Z)
+
+
+def set_xsi_transform(app, xsi_obj, usd_tfm):
+    tfm_data = usd_tfm[0]
+    time_samples = usd_tfm[1]
+    if len(time_samples) == 0:
+        # no animation
+        set_xsi_transform_at_frame(app, xsi_obj, tfm_data)
+    else:
+        for i in range(len(time_samples)):
+            frame = time_samples[i]
+            set_xsi_transform_at_frame(app, xsi_obj, tfm_data[i], frame=frame)
 
 
 def set_xsi_visibility(xsi_obj, is_visible):
+    # in Softimage visibility is not inherited from parent objects. SO, in our case "inherited" means visible
     vis_prop = xsi_obj.Properties("Visibility")
     vis_prop.Parameters("viewvis").Value = is_visible
     vis_prop.Parameters("rendvis").Value = is_visible

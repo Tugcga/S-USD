@@ -109,8 +109,8 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, mat
                 usd_model.SetInstanceable(True)
                 usd_pointer = UsdGeom.Xformable(usd_model)
                 prim_xform.add_transform_to_xfo(usd_pointer, obj, params.get("animation", None))
-
-        elif (obj_type == constants.siNullPrimType or obj_type == "CameraRoot") and constants.siNullPrimType in opt_object_types:
+                prim_xform.add_visibility_to_xfo(usd_pointer, obj)
+        elif (obj_type == constants.siNullPrimType and constants.siNullPrimType in opt_object_types) or (obj_type == "CameraRoot" and constants.siCameraPrimType in opt_object_types):
             # null
             usd_pointer, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, False, stage, obj, root_path)
         elif obj_type in ["cyclesPoint", "cyclesSun", "cyclesSpot", "cyclesArea", "cyclesBackground"]:

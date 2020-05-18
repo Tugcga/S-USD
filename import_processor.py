@@ -98,7 +98,7 @@ def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
     if item_type == "Xform":  # check only Xform, because each essential component should be child of the Xform
         new_object = None
         xform_name = usd_item.GetName()
-        usd_tfm = prim_xform.get_transform(usd_item)
+        usd_tfm = prim_xform.get_transform(usd_item)  # usd_tfm is a tuple (array of transforms or one transform, array of time samples)
         is_visible = prim_xform.get_visibility(usd_item)
         if usd_item.IsInstance():
             # this is an instance
@@ -108,15 +108,16 @@ def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
                 xsi_model = options["instances"][str(usd_master.GetPath())]
                 xsi_instance = app.Instantiate(xsi_model)[0]
                 app.DeselectAll()
-                app.CopyPaste(xsi_instance, "", xsi_parent, 1)
+                if xsi_parent.ObjectID != app.ActiveProject2.ActiveScene.Root.ObjectID:
+                    app.CopyPaste(xsi_instance, "", xsi_parent, 1)
                 utils.set_xsi_visibility(xsi_instance, is_visible)
-                utils.set_xsi_transform(xsi_instance, usd_tfm)
+                utils.set_xsi_transform(app, xsi_instance, usd_tfm)
             else:
                 # create the model
                 app.DeselectAll()
                 xsi_model = app.CreateModel("", xform_name, xsi_parent)[0]
                 utils.set_xsi_visibility(xsi_model, is_visible)
-                utils.set_xsi_transform(xsi_model, usd_tfm)
+                utils.set_xsi_transform(app, xsi_model, usd_tfm)
                 # instert objects inside this model
                 for child in usd_master.GetChildren():
                     import_item(app, options, child, usd_stage, xsi_model)
