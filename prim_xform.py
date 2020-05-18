@@ -12,7 +12,7 @@ def add_transform_to_xfo(usd_xform, obj, opt_anim):
             usd_tfm.Set(utils.build_transform(obj, frame), Usd.TimeCode(frame))
 
 
-def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
+def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, is_instance=False):
     imp.reload(utils)
     # we should create a new stage and reference the old one to this new
     opt_animation = params.get("animation", None)
@@ -28,6 +28,8 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path):
         # reference main stage to this new stage
         ref = stage.DefinePrim(root_path + "/" + obj.Name)
         ref.GetReferences().AddReference("./" + utils.get_last_folder(path_for_objects) + "/" + new_stage_name, "/" + obj.Name)
+        if is_instance:
+            ref.SetInstanceable(True)
         refXform = UsdGeom.Xformable(ref)
         refXform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
     else:

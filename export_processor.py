@@ -106,6 +106,7 @@ def export_step(app, params, path_for_objects, stage, obj, exported_objects, mat
                 # next export the link of the instance
                 usd_model = stage.DefinePrim(root_path + "/" + obj.Name)
                 usd_model.GetReferences().AddReference("./" + utils.get_last_folder(path_for_objects) + "/" + master.FullName + ".usda", "/" + master.Name)
+                usd_model.SetInstanceable(True)
                 usd_pointer = UsdGeom.Xformable(usd_model)
                 prim_xform.add_transform_to_xfo(usd_pointer, obj, params.get("animation", None))
 
