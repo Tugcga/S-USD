@@ -72,6 +72,6 @@ def get_visibility(usd_item):
 
 def emit_null(app, null_name, usd_tfm, visibility, usd_prim, xsi_parent):
     xsi_null = app.GetPrim("Null", null_name, xsi_parent)
-    utils.set_xsi_transform(xsi_null, usd_tfm)
+    utils.set_xsi_transform(app, xsi_null, usd_tfm)
     utils.set_xsi_visibility(xsi_null, visibility)
     return xsi_null

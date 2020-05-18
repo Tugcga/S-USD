@@ -25,6 +25,39 @@ def is_contains_transform(usd_prim):
     return "xformOp:transform" in usd_props
 
 
+def is_animated_mesh(usd_mesh, attributes):
+    '''return the pair (is_animated, is_topology_changed)
+    if at least one valid attribute has non-zero time samples, then is_animated = True
+    '''
+    # check for minimal data and normals
+    # minimal mesh data
+    points_attr = usd_mesh.GetPointsAttr()
+    faces_attr = usd_mesh.GetFaceVertexCountsAttr()
+    faces_indexes_attr = usd_mesh.GetFaceVertexIndicesAttr()
+    is_topology_changed = False
+    is_animated = False
+    if points_attr.IsAuthored() and faces_attr.IsAuthored() and faces_indexes_attr.IsAuthored():
+        points_times = points_attr.GetTimeSamples()
+        faces_times = faces_attr.GetTimeSamples()
+        faces_indexes_times = faces_indexes_attr.GetTimeSamples()
+        is_topology_changed = len(faces_times) > 1 or len(faces_indexes_times) > 1
+        if is_topology_changed or len(points_times) > 1:
+            is_animated = True
+            return is_animated, is_topology_changed
+        else:
+            # next check specific attributes
+            # normals
+            if "normal" in attributes:
+                normals_attr = usd_mesh.GetNormalsAttr()
+                if normals_attr.IsAuthored():
+                    normals_times = normals_attr.GetTimeSamples()
+                    if len(normals_times) > 1:
+                        is_animated = True
+                        return is_animated, is_topology_changed
+
+    return is_animated, is_topology_changed
+
+
 # --------------------XSI specific----------------------------
 def is_stands(pc_object):
     pc_geo = pc_object.GetActivePrimitive2().Geometry
@@ -120,6 +153,47 @@ def set_xsi_visibility(xsi_obj, is_visible):
     vis_prop.Parameters("rendvis").Value = is_visible
 
 
+def get_play_control_parameter(app, key):
+    prop_list = app.ActiveProject.Properties
+    play_ctrl = prop_list("Play Control")
+    frame_param = play_ctrl.Parameters(key)
+    return int(frame_param.Value)
+
+
+def get_current_frame(app):
+    return get_play_control_parameter(app, "Current")
+
+
+def get_start_timeline_frame(app):
+    return get_play_control_parameter(app, "In")
+
+
+def get_end_timeline_frame(app):
+    return get_play_control_parameter(app, "Out")
+
+
+def usd_to_xsi_vertex_array(usd_array):
+    vertices_x = []
+    vertices_y = []
+    vertices_z = []
+    for v in usd_array:
+        vertices_x.append(v[0])
+        vertices_y.append(v[1])
+        vertices_z.append(v[2])
+    return [vertices_x, vertices_y, vertices_z]
+
+
+def usd_to_xsi_faces_array(face_indexes, face_sizes):
+    polygons = []
+    index = 0
+    for f in face_sizes:
+        polygons.append(f)
+        for i in range(f):
+            polygons.append(face_indexes[index])
+            index += 1
+    return polygons
+
+
 # --------------------General----------------------------
 def from_scene_path_to_models_path(path):
     path_head, path_tail = os.path.split(path)
@@ -211,3 +285,18 @@ def transform_path_to_relative(path, base_path):
     '''transform absolute path to relative with respect to base_path
     '''
     return os.path.relpath(base_path, path)[3:]
+
+
+def get_closest_data(array, key):
+    ''' for array [(0, a), (2, b), (3, c), (5, d)] and key = 3 return c
+
+     we assume, that array is ordered by the first element in the tuple
+    '''
+    min_dist = abs(key - array[0][0])
+    min_index = 0
+    for index in range(len(array)):
+        d = abs(key - array[index][0])
+        if d < min_dist:
+            min_dist = d
+            min_index = index
+    return array[min_index][1]

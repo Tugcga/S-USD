@@ -12,6 +12,7 @@ def import_usd(app, file_path, options):
     imp.reload(prim_mesh)
     is_clear = options.get("clear_scene", False)
     options["instances"] = {}  # key - path of the imported master object, value - link to the corresponding xsi-object
+    options["file_path"] = file_path
     last_object_to_remove = None
     if is_clear:
         scene_root = app.ActiveProject2.ActiveScene.Root
@@ -81,7 +82,7 @@ def emit_item(app, options, usd_item, xsi_parent, predefined_name=None, predefin
     if item_type == "Xform" and constants.siNullPrimType in options["object_types"]:
         new_object = prim_xform.emit_null(app, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
     elif item_type == "Mesh" and constants.siPolyMeshType in options["object_types"]:
-        new_object = prim_mesh.emit_mesh(app, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
+        new_object = prim_mesh.emit_mesh(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
 
     return new_object
 
