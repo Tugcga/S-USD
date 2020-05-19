@@ -79,6 +79,7 @@ def USDExportCommand_Init(in_ctxt):
     args.Add("is_materials")
     args.Add("use_subdiv")
     args.Add("ignore_unknown")
+    args.Add("force_change_frame")
 
     return True
 
@@ -96,13 +97,15 @@ def USDExportCommand_Execute(*args):
     is_materials = args[5] if args[5] is not None else True
     use_subdiv = args[6] if args[6] is not None else False
     ignore_unknown = args[7] if args[7] is not None else True
+    force_change_frame = args[8] if args[8] is not None else False
 
     params = {"animation": animation,
               "objects_list": objects_list,
               "object_types": object_types,
               "attr_list": attr_list,
               "options": {"use_subdiv": use_subdiv,
-                          "ignore_unknown": ignore_unknown},
+                          "ignore_unknown": ignore_unknown,
+                          "force_change_frame": force_change_frame},
               "materials": {"is_materials": is_materials}}
 
     imp.reload(export_processor)
@@ -164,6 +167,8 @@ def USDExportOpen_Execute():
     param.Animatable = False
     param = prop.AddParameter3("opt_ignore_unknown", constants.siBool, True)
     param.Animatable = False
+    param = prop.AddParameter3("opt_force_key_change", constants.siBool, False)
+    param.Animatable = False
 
     # define layout
     layout = prop.PPGLayout
@@ -222,6 +227,7 @@ def USDExportOpen_Execute():
     layout.AddGroup("Options")
     layout.AddItem("opt_subdiv", "Activate Subdivision")
     layout.AddItem("opt_ignore_unknown", "Ignore Unexported Objects")
+    layout.AddItem("opt_force_key_change", "Change Frames in Animation Export")
     layout.EndGroup()
 
     rtn = app.InspectObj(prop, "", "Export *.usd file...", constants.siModal, False)
@@ -269,7 +275,8 @@ def USDExportOpen_Execute():
                              attributes,
                              prop.Parameters("is_materials").Value,
                              prop.Parameters("opt_subdiv").Value,
-                             prop.Parameters("opt_ignore_unknown").Value)
+                             prop.Parameters("opt_ignore_unknown").Value,
+                             prop.Parameters("opt_force_key_change").Value)
 
     # delete dialog
     app.DeleteObj(prop)

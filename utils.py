@@ -66,7 +66,7 @@ def is_stands(pc_object):
     return len(strands_data) > 0
 
 
-def is_constant_topology(mesh, opt_anim):
+def is_constant_topology(app, mesh, opt_anim, force_change_frame):
     if opt_anim is None:
         return True
     else:
@@ -75,6 +75,9 @@ def is_constant_topology(mesh, opt_anim):
         vertex_count = len(geo.Vertices)
         # next iterate by other frames
         for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            if force_change_frame:
+                app.SetValue("PlayControl.Current", frame, "")
+                app.SetValue("PlayControl.Key", frame, "")
             geo_frame = mesh.GetActivePrimitive3(frame).GetGeometry3(frame)
             verts_frame = len(geo_frame.Vertices)
             if vertex_count != verts_frame:
@@ -291,12 +294,22 @@ def get_closest_data(array, key):
     ''' for array [(0, a), (2, b), (3, c), (5, d)] and key = 3 return c
 
      we assume, that array is ordered by the first element in the tuple
+     find closest value by binary search algorithm
     '''
-    min_dist = abs(key - array[0][0])
-    min_index = 0
-    for index in range(len(array)):
-        d = abs(key - array[index][0])
-        if d < min_dist:
-            min_dist = d
-            min_index = index
-    return array[min_index][1]
+    if len(array) == 1:
+        return array[0][1]
+    else:
+        steps = 0
+        start = 0
+        end = len(array) - 1
+        while end - start > 1:
+            middle = (start + end) // 2
+            if array[middle][0] < key:
+                start = middle
+            else:
+                end = middle
+            steps += 1
+        if abs(key - array[start][0]) < abs(key - array[end][0]):
+            return array[start][1]
+        else:
+            return array[end][1]

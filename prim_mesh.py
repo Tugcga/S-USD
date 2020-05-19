@@ -4,7 +4,10 @@ import utils
 import imp
 
 
-def set_mesh_at_frame(stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=None):
+def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=None, force_frame=False):
+    if frame is not None and force_frame:
+        app.SetValue("PlayControl.Current", frame, "")
+        app.SetValue("PlayControl.Key", frame, "")
     # read mesh data
     xsi_polygonmesh = mesh_object.GetActivePrimitive3().Geometry if frame is None else mesh_object.GetActivePrimitive3(frame).GetGeometry3(frame)
     xsi_mesh_data = xsi_polygonmesh.Get2()
@@ -236,19 +239,19 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
         if utils.build_material_identifier(xsi_mat) in material_to_usd:
             UsdShade.MaterialBindingAPI(usd_mesh_prim).Bind(material_to_usd[utils.build_material_identifier(main_material)])
 
-    is_constant = utils.is_constant_topology(mesh_object, params.get("animation", None))
+    is_constant = utils.is_constant_topology(app, mesh_object, params.get("animation", None), opt.get("force_change_frame", False))
 
     if opt.get("use_subdiv", False):
         usd_mesh.CreateSubdivisionSchemeAttr().Set("catmullClark")
     else:
         usd_mesh.CreateSubdivisionSchemeAttr().Set("none")
     if opt_animation is None:
-        set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd)
+        set_mesh_at_frame(app, ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
             if progress_bar is not None:
                 progress_bar.Caption = utils.build_export_object_caption(mesh_object, frame)
-            set_mesh_at_frame(ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=frame)
+            set_mesh_at_frame(app, ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=frame, force_frame=opt.get("force_change_frame", False))
     ref_stage.Save()
 
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
@@ -270,7 +273,7 @@ def read_face_sizes(usd_mesh):
     usd_sizes = usd_mesh.GetFaceVertexCountsAttr()
     times = usd_sizes.GetTimeSamples()
     if len(times) <= 1:
-        return usd_sizes.Get()
+        return [(0, usd_sizes.Get())]
     else:
         array = []
         for frame in times:
@@ -284,7 +287,7 @@ def read_face_indexes(usd_mesh):
     usd_indexes = usd_mesh.GetFaceVertexIndicesAttr()
     times = usd_indexes.GetTimeSamples()
     if len(times) <= 1:
-        return usd_indexes.Get()
+        return [(0, usd_indexes.Get())]
     else:
         array = []
         for frame in times:
@@ -299,27 +302,35 @@ def read_mesh_data(file_path, mesh_path, data_dict):
     usd_mesh = UsdGeom.Mesh(stage.GetPrimAtPath(mesh_path))
     # we should get data of all attributes from usd_mesh and save it to data_dict by different keys
     # animated format is the following: it is an array of tuples [(frame, data at frame), ...]
-    # if there is only one frame (or zero), then data is an array [data]
+    # if there is only one frame (or zero), then data is an one-element array [(0, data)]
     data_dict["points"] = read_points(usd_mesh)
-    data_dict["face_sizes"] = read_face_sizes(usd_mesh)  # !!! may be it will be better to save each data in the same format, even if there no animations of it
+    data_dict["face_sizes"] = read_face_sizes(usd_mesh)
     data_dict["face_indexes"] = read_face_indexes(usd_mesh)
 
 
 def set_geometry_from_data(xsi_geometry, mesh_options, mesh_data, frame):
+    # mesh_options contains keys: attributes, is_topology_change
     # this method calls every frame from operator update
     # it use data, stored in mesh_data user data inside operator
+    xsi_vertex_count = xsi_geometry.Vertices.Count
     points_data = mesh_data["points"]
-    face_size_data = mesh_data["face_sizes"]
-    face_indexes_data = mesh_data["face_indexes"]
-    # find points closest to the frame
     points = utils.get_closest_data(points_data, frame)
-    face_size = utils.get_closest_data(face_size_data, frame) if mesh_options["is_topology_change"] else face_size_data
-    face_indexes = utils.get_closest_data(face_indexes_data, frame) if mesh_options["is_topology_change"] else face_indexes_data
+    xsi_points_postions = utils.usd_to_xsi_vertex_array(points)  # convert to xsi-specific format
+    if xsi_vertex_count == 0 or mesh_options["is_topology_change"] or xsi_vertex_count != len(points):
+        # cerate all topology
+        face_size_data = mesh_data["face_sizes"]
+        face_indexes_data = mesh_data["face_indexes"]
+        # find points closest to the frame
+        face_size = utils.get_closest_data(face_size_data, frame)
+        face_indexes = utils.get_closest_data(face_indexes_data, frame)
 
-    xsi_geometry.Set(utils.usd_to_xsi_vertex_array(points), utils.usd_to_xsi_faces_array(face_indexes, face_size))
+        xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size))
+    else:
+        # set only point positions
+        xsi_geometry.Vertices.PositionArray = xsi_points_postions
 
 
-def set_geometry(xsi_geometry, usd_mesh, mesh_options, frame=None):
+def set_geometry(xsi_geometry, usd_mesh, mesh_options):
     '''mesh_options contains "attributes" - list of geometry attributes
     '''
     # build polygons data
@@ -327,9 +338,9 @@ def set_geometry(xsi_geometry, usd_mesh, mesh_options, frame=None):
     usd_face_counts = usd_mesh.GetFaceVertexCountsAttr()
     usd_face_indexes = usd_mesh.GetFaceVertexIndicesAttr()
 
-    usd_points_array = usd_points.Get() if frame is None else usd_points.Get(frame)
-    usd_face_counts_array = usd_face_counts.Get() if frame is None else usd_face_counts.Get(frame)
-    usd_face_indexes_array = usd_face_indexes.Get() if frame is None else usd_face_indexes.Get(frame)
+    usd_points_array = usd_points.Get()
+    usd_face_counts_array = usd_face_counts.Get()
+    usd_face_indexes_array = usd_face_indexes.Get()
 
     xsi_geometry.Set(utils.usd_to_xsi_vertex_array(usd_points_array), utils.usd_to_xsi_faces_array(usd_face_indexes_array, usd_face_counts_array))
 
@@ -345,9 +356,9 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
     mesh_attributes = options.get("attributes", [])
     is_animated, is_topology_changed = utils.is_animated_mesh(usd_mesh, mesh_attributes)
     mesh_options = {"attributes": mesh_attributes}
-    mesh_options["is_topology_change"] = is_topology_changed
     if not is_animated:
         # simply apply geometry
+        mesh_options["is_topology_change"] = True  # for non-operator approach we should create full topology
         set_geometry(xsi_geometry, usd_mesh, mesh_options)
     else:
         # create operator, which updates topology every frame
