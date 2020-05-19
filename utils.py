@@ -168,7 +168,7 @@ def get_play_control_parameter(app, key):
     prop_list = app.ActiveProject.Properties
     play_ctrl = prop_list("Play Control")
     frame_param = play_ctrl.Parameters(key)
-    return int(frame_param.Value)
+    return int(frame_param.Value + 0.5)
 
 
 def get_current_frame(app):
@@ -197,7 +197,7 @@ def transpose_vectors_array(array):
 
 
 def transpose_2vectors_array(array):
-    '''transform array of the form [(x1, y1), (x2, y2, ...] to [[x1, x2, ...], [y1, y2, ...]]
+    '''transform array of the form [(x1, y1), (x2, y2), ...] to [[x1, x2, ...], [y1, y2, ...]]
     '''
     x = []
     y = []
@@ -205,6 +205,21 @@ def transpose_2vectors_array(array):
         x.append(v[0])
         y.append(v[1])
     return [x, y]
+
+
+def transpose_4vectors_array(array):
+    '''transform array of the form [(x1, y1, z1, w1), (x2, y2, z2, w2) ...] to [[x1, x2, ...], [y1, y2, ...], [z1, z2, ...], [w1, w2, ...]]
+    '''
+    x = []
+    y = []
+    z = []
+    w = []
+    for v in array:
+        x.append(v[0])
+        y.append(v[1])
+        z.append(v[2])
+        w.append(v[3])
+    return [x, y, z, w]
 
 
 def usd_to_xsi_faces_array(face_indexes, face_sizes):
@@ -348,3 +363,40 @@ def collapse_usd_hard_edges_data(indices, length, sharpness):
         shift += l
 
     return to_return
+
+
+def remove_last_part(original_str):
+    '''convert string aaa.bbb.ccc to aaa.bbb
+    '''
+    parts = original_str.split(".")
+    if len(parts) > 1:
+        sub_parts = parts[:-1]
+        return ".".join(sub_parts)
+    else:
+        return original_str
+
+
+def get_index_in_array_for_value(array, v):
+    for a_index in range(len(array)):
+        a = array[a_index]
+        if a[0] == v:
+            return a_index
+    return None
+
+
+def get_index_in_array_for_pair(array, v0, v1):
+    for a_index in range(len(array)):
+        a = array[a_index]
+        if (a[0] == v0 and a[1] == v1) or (a[0] == v1 and a[1] == v0):
+            return a_index
+    return None
+
+
+def get_in_dict(dict, key, default=None):
+    '''the same as dict.get(key, default)
+    XSI build-in dictionary does not supports this default method
+    '''
+    if key in dict:
+        return dict[key]
+    else:
+        return default

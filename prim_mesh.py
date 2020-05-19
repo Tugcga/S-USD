@@ -487,6 +487,7 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
     # mesh_options contains keys: attributes, is_topology_change
     # this method calls every frame from operator update (or at once, if the mesh is constructed without operator)
     # it use data, stored in mesh_data user data inside operator
+    attrs = mesh_options["attributes"]
     xsi_vertex_count = xsi_geometry.Vertices.Count
     points_data = mesh_data["points"]
     points = utils.get_closest_data(points_data, frame)
@@ -504,16 +505,17 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size))
 
         # setup clusters only at once, when we create the topology
-        for cluster_data in mesh_data["cluster"]:
-            xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+        if "cluster" in attrs:
+            for cluster_data in mesh_data["cluster"]:
+                xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
         is_mesh_empty = True
     else:
         # set only point positions
         xsi_geometry.Vertices.PositionArray = xsi_points_postions
 
     # next setup all other attributes
-    normals_data = mesh_data.get("normals", None)
-    if normals_data is not None:
+    normals_data = utils.get_in_dict(mesh_data, "normals")
+    if "normal" in attrs and normals_data is not None:
         normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
         if normals is not None and len(normals) > 0:
             normals_cls = None
@@ -536,8 +538,8 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
             xsi_normals = utils.transpose_vectors_array(normals)
             normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
 
-    uvs_data = mesh_data.get("uvs", None)
-    if uvs_data is not None:
+    uvs_data = utils.get_in_dict(mesh_data, "uvs")
+    if "uvmap" in attrs and uvs_data is not None:
         uvs_cls = None
         if not is_mesh_empty:
             find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates"
@@ -558,36 +560,98 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
             uv_array = utils.transpose_2vectors_array(uv_coordinates)
             uv_prop.Elements.Array = tuple([tuple(uv_array[0]), tuple(uv_array[1]), tuple([0]*len(uv_array[0]))])
 
-    colors_data = mesh_data.get("colors", None)
-    if colors_data is not None:
-        pass
+    colors_data = utils.get_in_dict(mesh_data, "colors")
+    if "color" in attrs and colors_data is not None:
+        colors_cls = None
+        if not is_mesh_empty:
+            find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors"
+            colors_cls = app.Dictionary.GetObject(find_path, False)
+        if colors_cls is None:
+            colors_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "VertexColors")
+        for color_data in colors_data:
+            color_name = color_data[0]
+            colors = utils.get_closest_data(color_data[1], 0 if frame is None else frame)
+            colors_prop = None
+            if not is_mesh_empty:
+                find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors." + color_name
+                colors_prop = app.Dictionary.GetObject(find_path, False)
+            if colors_prop is None:
+                new_colors_prop = app.AddProp("Vertex Color", colors_cls.FullName, constants.siDefaultPropagation, color_name)
+                colors_prop = new_colors_prop[1][0]
+            colors_array = utils.transpose_vectors_array(colors)
+            colors_prop.Elements.Array = tuple([tuple(colors_array[0]), tuple(colors_array[1]), tuple(colors_array[2])])
 
-    weightmaps_data = mesh_data.get("weightmaps", None)
-    if weightmaps_data is not None:
-        pass
+    weightmaps_data = utils.get_in_dict(mesh_data, "weightmaps")
+    if "weightmap" in attrs and weightmaps_data is not None:
+        weight_cls = None
+        if not is_mesh_empty:
+            find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls"
+            weight_cls = app.Dictionary.GetObject(find_path, False)
+        if weight_cls is None:
+            weight_cls = xsi_geometry.AddCluster(constants.siVertexCluster, "WeightMapCls")
+        for weight_data in weightmaps_data:
+            weight_name = weight_data[0]
+            weights = utils.get_closest_data(weight_data[1], 0 if frame is None else frame)
+            w_prop = None
+            if not is_mesh_empty:
+                find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls." + weight_name
+                w_prop = app.Dictionary.GetObject(find_path, False)
+            if w_prop is None:
+                new_w_prop = app.CreateWeightMap("", weight_cls.FullName, weight_name, "", False)
+                w_prop = new_w_prop[0]
+            w_prop.Elements.Array = [w for w in weights]
 
-    vertex_creases_data = mesh_data.get("vertex_creases", None)
-    if vertex_creases_data is not None:
-        pass
+    vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
+    if "vertex_creases" in attrs and vertex_creases_data is not None and len(vertex_creases_data) > 0:
+        vertex_creases = utils.get_closest_data(vertex_creases_data, 0 if frame is None else frame)  # array of the pairs (index, value)
+        vertices = xsi_geometry.Vertices
+        name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".pnt"
+        creases_dict = {}
+        for vert in vertices:
+            data_index = utils.get_index_in_array_for_value(vertex_creases, vert.Index)
+            if data_index is not None:
+                crease_value = vertex_creases[data_index][1]
+                is_find = False
+                for crease_key in creases_dict.keys():
+                    if abs(crease_key - crease_value) < 0.01:
+                        is_find = True
+                        creases_dict[crease_key].append(vert.Index)
+                if not is_find:
+                    creases_dict[crease_value] = [vert.Index]
+        for crease_key in creases_dict.keys():
+            a = creases_dict[crease_key]
+            if len(a) > 0:
+                op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(a), 3, constants.siPersistentOperation)
+                op[0].Parameters("CreaseValue").Value = crease_key
 
-    edge_creases_data = mesh_data.get("edge_creases", None)
-    if edge_creases_data is not None:
-        pass
-
-
-def set_geometry(xsi_geometry, usd_mesh, mesh_options):
-    '''mesh_options contains "attributes" - list of geometry attributes
-    '''
-    # build polygons data
-    usd_points = usd_mesh.GetPointsAttr()
-    usd_face_counts = usd_mesh.GetFaceVertexCountsAttr()
-    usd_face_indexes = usd_mesh.GetFaceVertexIndicesAttr()
-
-    usd_points_array = usd_points.Get()
-    usd_face_counts_array = usd_face_counts.Get()
-    usd_face_indexes_array = usd_face_indexes.Get()
-
-    xsi_geometry.Set(utils.transpose_vectors_array(usd_points_array), utils.usd_to_xsi_faces_array(usd_face_indexes_array, usd_face_counts_array))
+    edge_creases_data = utils.get_in_dict(mesh_data, "edge_creases")
+    if "edge_creases" in attrs and edge_creases_data is not None and len(edge_creases_data) > 0:
+        edges_creases = utils.get_closest_data(edge_creases_data, 0 if frame is None else frame)  # array of triplets [(s, e, value), ...]
+        mesh_edges = xsi_geometry.Edges
+        name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".edge"
+        # set crease value to each edge separatly
+        creases_dict = {}  # store edge indexes for different values (epsilon = 0.001)
+        for edge in mesh_edges:
+            edge_verts = edge.Vertices
+            v0 = edge_verts[0].Index
+            v1 = edge_verts[1].Index
+            data_index = utils.get_index_in_array_for_pair(edges_creases, v0, v1)
+            if data_index is not None:
+                crease_value = edges_creases[data_index][2]
+                # find in the dict
+                is_find = False
+                for crease_key in creases_dict.keys():
+                    if abs(crease_key - crease_value) < 0.01:
+                        is_find = True
+                        creases_dict[crease_key].append(edge.Index)
+                if not is_find:
+                    creases_dict[crease_value] = [edge.Index]
+        # apply crease operator for each array in the dict
+        for crease_key in creases_dict.keys():
+            a = creases_dict[crease_key]
+            if len(a) > 0:
+                op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(creases_dict[crease_key]), 3, constants.siPersistentOperation)
+                op[0].Parameters("CreaseValue").Value = crease_key
 
 
 def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent):
@@ -607,7 +671,6 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
         data_dict = {}
         read_mesh_data(mesh_options, data_dict, usd_mesh=usd_mesh)
         set_geometry_from_data(app, xsi_geometry, mesh_options, data_dict)
-        # set_geometry(xsi_geometry, usd_mesh, mesh_options)
     else:
         # create operator, which updates topology every frame
         operator = app.AddCustomOp("USDMeshOperator", xsi_mesh.ActivePrimitive, "", "USDMeshOperator")
