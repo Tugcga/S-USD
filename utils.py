@@ -59,6 +59,14 @@ def is_animated_mesh(usd_mesh, attributes):
 
 
 # --------------------XSI specific----------------------------
+def get_plugin_path(app, plugin_name):
+    plugins = app.Plugins
+    for p in plugins:
+        if p.Name == plugin_name:
+            return p.OriginPath
+    return None
+
+
 def is_stands(pc_object):
     pc_geo = pc_object.GetActivePrimitive2().Geometry
     strands_position_attr = pc_geo.GetICEAttributeFromName("StrandPosition")

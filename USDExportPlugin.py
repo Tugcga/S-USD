@@ -7,6 +7,7 @@
 import win32com.client
 from win32com.client import constants
 import sys
+import os
 if __sipath__ not in sys.path:
     sys.path.append(__sipath__)
 import export_processor
@@ -115,59 +116,91 @@ def USDExportCommand_Execute(*args):
 
 
 def USDExportOpen_Execute():
+    imp.reload(utils)
     scene_root = app.ActiveProject2.ActiveScene.Root
+
+    # read settings from previous opened window
+    plugin_path = utils.get_plugin_path(app, "USDExportPlugin")
+    props_path = plugin_path + "export.props"
+    if os.path.isfile(props_path):
+        with open(props_path, "r") as file:
+            export_props = eval(file.read())
+    else:  # set default values
+        export_props = {"is_selection": False,
+                        "is_animation": False,
+                        "is_polymesh": True,
+                        "is_lights": True,
+                        "is_cameras": True,
+                        "is_strands": True,
+                        "is_hairs": True,
+                        "is_pointclouds": True,
+                        "is_nulls": True,
+                        "is_models": True,
+                        "is_uv_maps": True,
+                        "is_normals": True,
+                        "is_weightmaps": True,
+                        "is_clusters": True,
+                        "is_vertex_creases": True,
+                        "is_edge_creases": True,
+                        "is_vertex_color": True,
+                        "is_materials": True,
+                        "start_frame": get_start_timeline_frame(),
+                        "end_frame": get_end_timeline_frame(),
+                        "opt_subdiv": False,
+                        "opt_ignore_unknown": True,
+                        "opt_force_key_change": False}
 
     # create property
     prop = scene_root.AddProperty("CustomProperty", False, "USD_Export")
 
     # add parameters
     prop.AddParameter3("file_path", constants.siString, "", "", "", False, False)
-    param = prop.AddParameter3("is_selection", constants.siBool, False)
+    param = prop.AddParameter3("is_selection", constants.siBool, export_props["is_selection"])
     param.Animatable = False
-    param = prop.AddParameter3("is_animation", constants.siBool, False)
+    param = prop.AddParameter3("is_animation", constants.siBool, export_props["is_animation"])
     param.Animatable = False
     # object types
-    param = prop.AddParameter3("is_polymesh", constants.siBool, True)
+    param = prop.AddParameter3("is_polymesh", constants.siBool, export_props["is_polymesh"])
     param.Animatable = False
-    param = prop.AddParameter3("is_lights", constants.siBool, True)
+    param = prop.AddParameter3("is_lights", constants.siBool, export_props["is_lights"])
     param.Animatable = False
-    param = prop.AddParameter3("is_cameras", constants.siBool, True)
+    param = prop.AddParameter3("is_cameras", constants.siBool, export_props["is_cameras"])
     param.Animatable = False
-    param = prop.AddParameter3("is_strands", constants.siBool, True)
+    param = prop.AddParameter3("is_strands", constants.siBool, export_props["is_strands"])
     param.Animatable = False
-    param = prop.AddParameter3("is_hairs", constants.siBool, True)
+    param = prop.AddParameter3("is_hairs", constants.siBool, export_props["is_hairs"])
     param.Animatable = False
-    param = prop.AddParameter3("is_pointclouds", constants.siBool, True)
+    param = prop.AddParameter3("is_pointclouds", constants.siBool, export_props["is_pointclouds"])
     param.Animatable = False
-    param = prop.AddParameter3("is_nulls", constants.siBool, True)
+    param = prop.AddParameter3("is_nulls", constants.siBool, export_props["is_nulls"])
     param.Animatable = False
-    param = prop.AddParameter3("is_models", constants.siBool, True)
+    param = prop.AddParameter3("is_models", constants.siBool, export_props["is_models"])
     param.Animatable = False
     # attributes
-    param = prop.AddParameter3("is_uv_maps", constants.siBool, True)
+    param = prop.AddParameter3("is_uv_maps", constants.siBool, export_props["is_uv_maps"])
     param.Animatable = False
-    param = prop.AddParameter3("is_normals", constants.siBool, True)
+    param = prop.AddParameter3("is_normals", constants.siBool, export_props["is_normals"])
     param.Animatable = False
-    param = prop.AddParameter3("is_weightmaps", constants.siBool, True)
+    param = prop.AddParameter3("is_weightmaps", constants.siBool, export_props["is_weightmaps"])
     param.Animatable = False
-    param = prop.AddParameter3("is_clusters", constants.siBool, True)
+    param = prop.AddParameter3("is_clusters", constants.siBool, export_props["is_clusters"])
     param.Animatable = False
-    param = prop.AddParameter3("is_vertex_creases", constants.siBool, True)
+    param = prop.AddParameter3("is_vertex_creases", constants.siBool, export_props["is_vertex_creases"])
     param.Animatable = False
-    param = prop.AddParameter3("is_edge_creases", constants.siBool, True)
+    param = prop.AddParameter3("is_edge_creases", constants.siBool, export_props["is_edge_creases"])
     param.Animatable = False
-    param = prop.AddParameter3("is_vertex_color", constants.siBool, True)
+    param = prop.AddParameter3("is_vertex_color", constants.siBool, export_props["is_vertex_color"])
     param.Animatable = False
-    param = prop.AddParameter3("is_materials", constants.siBool, True)
+    param = prop.AddParameter3("is_materials", constants.siBool, export_props["is_materials"])
     param.Animatable = False
-    prop.AddParameter2("start_frame", constants.siInt4, get_start_timeline_frame(), -2147483648, 2147483647, get_start_timeline_frame(), get_end_timeline_frame())
-    prop.AddParameter2("end_frame", constants.siInt4, get_end_timeline_frame(), -2147483648, 2147483647, get_start_timeline_frame(), get_end_timeline_frame())
+    prop.AddParameter2("start_frame", constants.siInt4, export_props["start_frame"], -2147483648, 2147483647, export_props["start_frame"], export_props["end_frame"])
+    prop.AddParameter2("end_frame", constants.siInt4, export_props["end_frame"], -2147483648, 2147483647, export_props["start_frame"], export_props["end_frame"])
 
-    param = prop.AddParameter3("opt_subdiv", constants.siBool, False)
+    param = prop.AddParameter3("opt_subdiv", constants.siBool, export_props["opt_subdiv"])
     param.Animatable = False
-    param = prop.AddParameter3("opt_ignore_unknown", constants.siBool, True)
+    param = prop.AddParameter3("opt_ignore_unknown", constants.siBool, export_props["opt_ignore_unknown"])
     param.Animatable = False
-    param = prop.AddParameter3("opt_force_key_change", constants.siBool, False)
+    param = prop.AddParameter3("opt_force_key_change", constants.siBool, export_props["opt_force_key_change"])
     param.Animatable = False
 
     # define layout
@@ -233,6 +266,35 @@ def USDExportOpen_Execute():
     rtn = app.InspectObj(prop, "", "Export *.usd file...", constants.siModal, False)
     if rtn is False:
         # click "ok", execute export command
+        # save props file
+        # set it
+        export_props["is_selection"] = prop.Parameters("is_selection").Value
+        export_props["is_animation"] = prop.Parameters("is_animation").Value
+        export_props["is_polymesh"] = prop.Parameters("is_polymesh").Value
+        export_props["is_lights"] = prop.Parameters("is_lights").Value
+        export_props["is_cameras"] = prop.Parameters("is_cameras").Value
+        export_props["is_strands"] = prop.Parameters("is_strands").Value
+        export_props["is_hairs"] = prop.Parameters("is_hairs").Value
+        export_props["is_pointclouds"] = prop.Parameters("is_pointclouds").Value
+        export_props["is_nulls"] = prop.Parameters("is_nulls").Value
+        export_props["is_models"] = prop.Parameters("is_models").Value
+        export_props["is_uv_maps"] = prop.Parameters("is_uv_maps").Value
+        export_props["is_normals"] = prop.Parameters("is_normals").Value
+        export_props["is_weightmaps"] = prop.Parameters("is_weightmaps").Value
+        export_props["is_clusters"] = prop.Parameters("is_clusters").Value
+        export_props["is_vertex_creases"] = prop.Parameters("is_vertex_creases").Value
+        export_props["is_edge_creases"] = prop.Parameters("is_edge_creases").Value
+        export_props["is_vertex_color"] = prop.Parameters("is_vertex_color").Value
+        export_props["is_materials"] = prop.Parameters("is_materials").Value
+        export_props["start_frame"] = prop.Parameters("start_frame").Value
+        export_props["end_frame"] = prop.Parameters("end_frame").Value
+        export_props["opt_subdiv"] = prop.Parameters("opt_subdiv").Value
+        export_props["opt_ignore_unknown"] = prop.Parameters("opt_ignore_unknown").Value
+        export_props["opt_force_key_change"] = prop.Parameters("opt_force_key_change").Value
+        # write it
+        with open(props_path, "w") as file:
+            file.write(str(export_props))
+
         objects_types = []
         if prop.Parameters("is_nulls").Value:
             objects_types.append(constants.siNullPrimType)

@@ -11,6 +11,7 @@ import os
 if __sipath__ not in sys.path:
     sys.path.append(__sipath__)
 import import_processor
+import utils
 import imp
 
 null = None
@@ -79,46 +80,70 @@ def USDImportCommand_Execute(*args):
 
 
 def USDImportOpen_Execute():
+    imp.reload(utils)
     scene_root = app.ActiveProject2.ActiveScene.Root
+
+    plugin_path = utils.get_plugin_path(app, "USDImportPlugin")
+    props_path = plugin_path + "import.props"
+    if os.path.isfile(props_path):
+        with open(props_path, "r") as file:
+            import_props = eval(file.read())
+    else:  # set default values
+        import_props = {"clear_scene": True,
+                        "materials": True,
+                        "is_polymesh": True,
+                        "is_lights": True,
+                        "is_cameras": True,
+                        "is_strands": True,
+                        "is_pointclouds": True,
+                        "is_nulls": True,
+                        "is_models": True,
+                        "is_uv_maps": True,
+                        "is_normals": True,
+                        "is_weightmaps": True,
+                        "is_clusters": True,
+                        "is_vertex_creases": True,
+                        "is_edge_creases": True,
+                        "is_vertex_color": True}
 
     # create property
     prop = scene_root.AddProperty("CustomProperty", False, "USD_Import")
 
     # add parameters
     prop.AddParameter3("file_path", constants.siString, "", "", "", False, False)
-    param = prop.AddParameter3("clear_scene", constants.siBool, True)
+    param = prop.AddParameter3("clear_scene", constants.siBool, import_props["clear_scene"])
     param.Animatable = False
-    param = prop.AddParameter3("materials", constants.siBool, True)
-    param.Animatable = False
-
-    param = prop.AddParameter3("is_polymesh", constants.siBool, True)
-    param.Animatable = False
-    param = prop.AddParameter3("is_lights", constants.siBool, True)
-    param.Animatable = False
-    param = prop.AddParameter3("is_cameras", constants.siBool, True)
-    param.Animatable = False
-    param = prop.AddParameter3("is_strands", constants.siBool, True)
-    param.Animatable = False
-    param = prop.AddParameter3("is_pointclouds", constants.siBool, True)
-    param.Animatable = False
-    param = prop.AddParameter3("is_nulls", constants.siBool, True)
-    param.Animatable = False
-    param = prop.AddParameter3("is_models", constants.siBool, True)
+    param = prop.AddParameter3("materials", constants.siBool, import_props["materials"])
     param.Animatable = False
 
-    param = prop.AddParameter3("is_uv_maps", constants.siBool, True)
+    param = prop.AddParameter3("is_polymesh", constants.siBool, import_props["is_polymesh"])
     param.Animatable = False
-    param = prop.AddParameter3("is_normals", constants.siBool, True)
+    param = prop.AddParameter3("is_lights", constants.siBool, import_props["is_lights"])
     param.Animatable = False
-    param = prop.AddParameter3("is_weightmaps", constants.siBool, True)
+    param = prop.AddParameter3("is_cameras", constants.siBool, import_props["is_cameras"])
     param.Animatable = False
-    param = prop.AddParameter3("is_clusters", constants.siBool, True)
+    param = prop.AddParameter3("is_strands", constants.siBool, import_props["is_strands"])
     param.Animatable = False
-    param = prop.AddParameter3("is_vertex_creases", constants.siBool, True)
+    param = prop.AddParameter3("is_pointclouds", constants.siBool, import_props["is_pointclouds"])
     param.Animatable = False
-    param = prop.AddParameter3("is_edge_creases", constants.siBool, True)
+    param = prop.AddParameter3("is_nulls", constants.siBool, import_props["is_nulls"])
     param.Animatable = False
-    param = prop.AddParameter3("is_vertex_color", constants.siBool, True)
+    param = prop.AddParameter3("is_models", constants.siBool, import_props["is_models"])
+    param.Animatable = False
+
+    param = prop.AddParameter3("is_uv_maps", constants.siBool, import_props["is_uv_maps"])
+    param.Animatable = False
+    param = prop.AddParameter3("is_normals", constants.siBool, import_props["is_normals"])
+    param.Animatable = False
+    param = prop.AddParameter3("is_weightmaps", constants.siBool, import_props["is_weightmaps"])
+    param.Animatable = False
+    param = prop.AddParameter3("is_clusters", constants.siBool, import_props["is_clusters"])
+    param.Animatable = False
+    param = prop.AddParameter3("is_vertex_creases", constants.siBool, import_props["is_vertex_creases"])
+    param.Animatable = False
+    param = prop.AddParameter3("is_edge_creases", constants.siBool, import_props["is_edge_creases"])
+    param.Animatable = False
+    param = prop.AddParameter3("is_vertex_color", constants.siBool, import_props["is_vertex_color"])
     param.Animatable = False
 
     # define layout
@@ -175,6 +200,25 @@ def USDImportOpen_Execute():
 
     rtn = app.InspectObj(prop, "", "Import *.usd file...", constants.siModal, False)
     if rtn is False:
+        import_props["clear_scene"] = prop.Parameters("clear_scene").Value
+        import_props["materials"] = prop.Parameters("materials").Value
+        import_props["is_polymesh"] = prop.Parameters("is_polymesh").Value
+        import_props["is_lights"] = prop.Parameters("is_lights").Value
+        import_props["is_cameras"] = prop.Parameters("is_cameras").Value
+        import_props["is_strands"] = prop.Parameters("is_strands").Value
+        import_props["is_pointclouds"] = prop.Parameters("is_pointclouds").Value
+        import_props["is_nulls"] = prop.Parameters("is_nulls").Value
+        import_props["is_models"] = prop.Parameters("is_models").Value
+        import_props["is_uv_maps"] = prop.Parameters("is_uv_maps").Value
+        import_props["is_normals"] = prop.Parameters("is_normals").Value
+        import_props["is_weightmaps"] = prop.Parameters("is_weightmaps").Value
+        import_props["is_clusters"] = prop.Parameters("is_clusters").Value
+        import_props["is_vertex_creases"] = prop.Parameters("is_vertex_creases").Value
+        import_props["is_edge_creases"] = prop.Parameters("is_edge_creases").Value
+        import_props["is_vertex_color"] = prop.Parameters("is_vertex_color").Value
+        with open(props_path, "w") as file:
+            file.write(str(import_props))
+
         objects_types = []
         if prop.Parameters("is_nulls").Value:
             objects_types.append(constants.siNullPrimType)

@@ -3,3 +3,5 @@
 *.pyo
 __pycache__
 pxr
+export.props
+import.props
