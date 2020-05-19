@@ -183,15 +183,28 @@ def get_end_timeline_frame(app):
     return get_play_control_parameter(app, "Out")
 
 
-def usd_to_xsi_vertex_array(usd_array):
-    vertices_x = []
-    vertices_y = []
-    vertices_z = []
-    for v in usd_array:
-        vertices_x.append(v[0])
-        vertices_y.append(v[1])
-        vertices_z.append(v[2])
-    return [vertices_x, vertices_y, vertices_z]
+def transpose_vectors_array(array):
+    '''transform array of the form [(x1, y1, z1), (x2, y2, z2), ...] to [[x1, x2, ...], [y1, y2, ...], [z1, z2, ...]]
+    '''
+    x = []
+    y = []
+    z = []
+    for v in array:
+        x.append(v[0])
+        y.append(v[1])
+        z.append(v[2])
+    return [x, y, z]
+
+
+def transpose_2vectors_array(array):
+    '''transform array of the form [(x1, y1), (x2, y2, ...] to [[x1, x2, ...], [y1, y2, ...]]
+    '''
+    x = []
+    y = []
+    for v in array:
+        x.append(v[0])
+        y.append(v[1])
+    return [x, y]
 
 
 def usd_to_xsi_faces_array(face_indexes, face_sizes):
@@ -321,3 +334,17 @@ def get_closest_data(array, key):
             return array[start][1]
         else:
             return array[end][1]
+
+
+def collapse_usd_hard_edges_data(indices, length, sharpness):
+    '''convert three attributes for usd edge sharpness to one array of triples (v_start, v_end, sharpness)
+    '''
+    to_return = []
+    shift = 0
+    for segment_index in range(len(length)):
+        l = length[segment_index]
+        for i in range(l - 1):
+            to_return.append((indices[shift + i], indices[shift + i + 1], sharpness[segment_index]))
+        shift += l
+
+    return to_return

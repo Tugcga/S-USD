@@ -1,4 +1,5 @@
 from pxr import UsdGeom, Sdf, Usd, UsdShade
+from win32com.client import constants
 import prim_xform
 import utils
 import imp
@@ -258,20 +259,24 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
 
 
 def read_points(usd_mesh):
+    to_return = []
     usd_points = usd_mesh.GetPointsAttr()
     times = usd_points.GetTimeSamples()
-    points_array = []
-    for frame in times:
-        points_at_frame = usd_points.Get(frame)
-        points_array.append((frame, points_at_frame))
-    sorted(points_array, key=lambda x: x[0])
+    sorted(times)
+    if len(times) <= 0:
+        to_return.append((0, usd_points.Get()))
+    else:
+        for frame in times:
+            points_at_frame = usd_points.Get(frame)
+            to_return.append((frame, points_at_frame))
 
-    return points_array
+    return to_return
 
 
 def read_face_sizes(usd_mesh):
     usd_sizes = usd_mesh.GetFaceVertexCountsAttr()
     times = usd_sizes.GetTimeSamples()
+    sorted(times)
     if len(times) <= 1:
         return [(0, usd_sizes.Get())]
     else:
@@ -279,13 +284,14 @@ def read_face_sizes(usd_mesh):
         for frame in times:
             sizes_at_frame = usd_sizes.Get(frame)
             array.append((frame, sizes_at_frame))
-        sorted(array, key=lambda x: x[0])
+        # sorted(array, key=lambda x: x[0])
         return array
 
 
 def read_face_indexes(usd_mesh):
     usd_indexes = usd_mesh.GetFaceVertexIndicesAttr()
     times = usd_indexes.GetTimeSamples()
+    sorted(times)
     if len(times) <= 1:
         return [(0, usd_indexes.Get())]
     else:
@@ -293,29 +299,200 @@ def read_face_indexes(usd_mesh):
         for frame in times:
             indexes_at_frame = usd_indexes.Get(frame)
             array.append((frame, indexes_at_frame))
-        sorted(array, key=lambda x: x[0])
+        # sorted(array, key=lambda x: x[0])
         return array
 
 
-def read_mesh_data(file_path, mesh_path, data_dict):
-    stage = Usd.Stage.Open(file_path)
-    usd_mesh = UsdGeom.Mesh(stage.GetPrimAtPath(mesh_path))
+def read_edges_creases(usd_mesh):
+    '''return array [(frame1, data1), ...], where each data is array of triples [(v_star, v_end, sharpness), ...]
+    '''
+    to_return = []
+    indices_attr = usd_mesh.GetCreaseIndicesAttr()
+    length_attr = usd_mesh.GetCreaseLengthsAttr()
+    sharpness_attr = usd_mesh.GetCreaseSharpnessesAttr()
+    times = indices_attr.GetTimeSamples()
+    sorted(times)
+    if indices_attr.IsAuthored() and length_attr.IsAuthored() and sharpness_attr.IsAuthored() and len(times) == len(length_attr.GetTimeSamples()) and len(times) == len(sharpness_attr.GetTimeSamples()):
+        if len(times) <= 1:
+            to_return.append((0, utils.collapse_usd_hard_edges_data(indices_attr.Get(), length_attr.Get(), sharpness_attr.Get())))
+        else:
+            for frame in times:
+                to_return.append((frame, utils.collapse_usd_hard_edges_data(indices_attr.Get(frame), length_attr.Get(frame), sharpness_attr.Get(frame))))
+
+    return to_return
+
+
+def read_vertex_creases(usd_mesh):
+    '''return array [(frame1, data1), ...]
+    each data is an array of pairs [(indexes, sharpness), ...] for each vertex in the cluster
+    '''
+    to_return = []
+    # get attributes
+    indexes_attr = usd_mesh.GetCornerIndicesAttr()
+    sharpness_attr = usd_mesh.GetCornerSharpnessesAttr()
+    indexes_times = indexes_attr.GetTimeSamples()
+    sharpness_times = sharpness_attr.GetTimeSamples()
+    if indexes_attr.IsAuthored() and sharpness_attr.IsAuthored() and len(indexes_times) == len(sharpness_times):
+        times = indexes_times
+        sorted(times)
+        if len(times) <= 1:
+            to_return.append((0, zip(indexes_attr.Get(), sharpness_attr.Get())))
+        else:
+            for frame in times:
+                to_return.append((frame, zip(indexes_attr.Get(frame), sharpness_attr.Get(frame))))
+
+    return to_return
+
+
+def read_normals(usd_mesh):
+    to_return = []
+    usd_normals = usd_mesh.GetNormalsAttr()
+    times = usd_normals.GetTimeSamples()
+    sorted(times)
+    if len(times) <= 1:
+        to_return.append((0, usd_normals.Get()))
+    else:
+        for frame in times:
+            vals_at_frame = usd_normals.Get(frame)
+            to_return.append((frame, vals_at_frame))
+
+    return to_return
+
+
+def read_uvs(usd_mesh):
+    '''store uvs in array [uv1, uv2, ...], where each uv is a pair (name, array [(frame1, data1), (frame2, data2), ...])
+    '''
+    primvars = usd_mesh.GetPrimvars()
+    to_return = []
+    for p in primvars:
+        type_strings = p.GetTypeName().aliasesAsStrings
+        if "texCoord2f[]" in type_strings:
+            # this is uv primvar
+            uv_data = []
+            uv_name = p.GetBaseName()
+            uv_time = p.GetTimeSamples()
+            sorted(uv_time)
+            uv_attribute = p.GetAttr()
+            if len(uv_time) <= 1:
+                uv_data.append((0, uv_attribute.Get()))
+            else:
+                for frame in uv_time:
+                    uv_data.append((frame, uv_attribute.Get(frame)))
+            to_return.append((uv_name, uv_data))
+
+    return to_return
+
+
+def read_vertex_colors(usd_mesh):
+    primvars = usd_mesh.GetPrimvars()
+    to_return = []
+    for p in primvars:
+        type_strings = p.GetTypeName().aliasesAsStrings
+        interpolation = p.GetInterpolation()
+        if "color3f[]" in type_strings and interpolation == "faceVarying":
+            # vertex colors are only face-varuing
+            color_data = []
+            color_name = p.GetBaseName()
+            color_time = p.GetTimeSamples()
+            sorted(color_time)
+            color_attribute = p.GetAttr()
+            if len(color_time) <= 1:
+                color_data.append((0, color_attribute.Get()))
+            else:
+                for frame in color_time:
+                    color_data.append((frame, color_attribute.Get(frame)))
+            to_return.append((color_name, color_data))
+
+    return to_return
+
+
+def read_weightmaps(usd_mesh):
+    '''result is array [(name, weightmap), ...], each weightmap is an array [(frame1, data1), ...]
+    '''
+    primvars = usd_mesh.GetPrimvars()
+    to_return = []
+    for p in primvars:
+        type_strings = p.GetTypeName().aliasesAsStrings
+        interpolation = p.GetInterpolation()
+        if interpolation == "vertex" and "float[]" in type_strings:
+            # weightmaps only per-vertex and has float values
+            weight_data = []
+            weight_name = p.GetBaseName()
+            weight_time = p.GetTimeSamples()
+            sorted(weight_time)
+            weight_attr = p.GetAttr()
+            if len(weight_time) <= 1:
+                weight_data.append((0, weight_attr.Get()))
+            else:
+                for frame in weight_time:
+                    weight_data.append((frame, weight_attr.Get(frame)))
+            to_return.append((weight_name, weight_data))
+    return to_return
+
+
+def read_clusters(usd_mesh):
+    '''return an array of pair [(name, [indices]), ...]
+    '''
+    to_return = []
+    usd_prim = usd_mesh.GetPrim()
+
+    for child in usd_prim.GetChildren():
+        type_name = child.GetTypeName()
+        if type_name == "GeomSubset":
+            # this is a cluster
+            element_type_attr = None
+            indices_attr = None
+            child_attributes = child.GetAttributes()
+            for attr in child_attributes:
+                if attr.IsAuthored():
+                    if attr.GetName() == "elementType":
+                        element_type_attr = attr
+                    elif attr.GetName() == "indices":
+                        indices_attr = attr
+            if element_type_attr is not None and indices_attr is not None and element_type_attr.Get() == "face":
+                to_return.append((child.GetName(), indices_attr.Get()))
+
+    return to_return
+
+
+def read_mesh_data(mesh_options, data_dict, file_path=None, mesh_path=None, usd_mesh=None):
+    # mesh_options = {"attributes": ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')}
+    if usd_mesh is None:
+        stage = Usd.Stage.Open(file_path)
+        usd_mesh = UsdGeom.Mesh(stage.GetPrimAtPath(mesh_path))
     # we should get data of all attributes from usd_mesh and save it to data_dict by different keys
     # animated format is the following: it is an array of tuples [(frame, data at frame), ...]
     # if there is only one frame (or zero), then data is an one-element array [(0, data)]
     data_dict["points"] = read_points(usd_mesh)
     data_dict["face_sizes"] = read_face_sizes(usd_mesh)
     data_dict["face_indexes"] = read_face_indexes(usd_mesh)
+    attrs = mesh_options.get("attributes", [])
+    if "normal" in attrs:
+        data_dict["normals"] = read_normals(usd_mesh)
+    if "uvmap" in attrs:
+        data_dict["uvs"] = read_uvs(usd_mesh)
+    if "color" in attrs:
+        data_dict["colors"] = read_vertex_colors(usd_mesh)
+    if "weightmap" in attrs:
+        data_dict["weightmaps"] = read_weightmaps(usd_mesh)
+    if "vertex_creases" in attrs:
+        data_dict["vertex_creases"] = read_vertex_creases(usd_mesh)
+    if "edge_creases" in attrs:
+        data_dict["edge_creases"] = read_edges_creases(usd_mesh)
+    if "cluster" in attrs:
+        data_dict["cluster"] = read_clusters(usd_mesh)
 
 
-def set_geometry_from_data(xsi_geometry, mesh_options, mesh_data, frame):
+def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=None):
     # mesh_options contains keys: attributes, is_topology_change
-    # this method calls every frame from operator update
+    # this method calls every frame from operator update (or at once, if the mesh is constructed without operator)
     # it use data, stored in mesh_data user data inside operator
     xsi_vertex_count = xsi_geometry.Vertices.Count
     points_data = mesh_data["points"]
     points = utils.get_closest_data(points_data, frame)
-    xsi_points_postions = utils.usd_to_xsi_vertex_array(points)  # convert to xsi-specific format
+    xsi_points_postions = utils.transpose_vectors_array(points)  # convert to xsi-specific format
+    is_mesh_empty = False
+
     if xsi_vertex_count == 0 or mesh_options["is_topology_change"] or xsi_vertex_count != len(points):
         # cerate all topology
         face_size_data = mesh_data["face_sizes"]
@@ -325,9 +502,77 @@ def set_geometry_from_data(xsi_geometry, mesh_options, mesh_data, frame):
         face_indexes = utils.get_closest_data(face_indexes_data, frame)
 
         xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size))
+
+        # setup clusters only at once, when we create the topology
+        for cluster_data in mesh_data["cluster"]:
+            xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+        is_mesh_empty = True
     else:
         # set only point positions
         xsi_geometry.Vertices.PositionArray = xsi_points_postions
+
+    # next setup all other attributes
+    normals_data = mesh_data.get("normals", None)
+    if normals_data is not None:
+        normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
+        if normals is not None and len(normals) > 0:
+            normals_cls = None
+            # may be geometry already contains normal cluster, find it
+            if not is_mesh_empty:
+                find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster"
+                normals_cls = app.Dictionary.GetObject(find_path, False)
+            # if we did not find normal cluster, create the new one
+            if normals_cls is None:
+                normals_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "User_Normal_Cluster")
+            normal_name = "User_Normal_Property"
+            # try to find normals property
+            normals_prop = None
+            if not is_mesh_empty:
+                find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster." + normal_name
+                normals_prop = app.Dictionary.GetObject(find_path, False)
+            if normals_prop is None:
+                new_normals_prop = app.AddProp("User Normal Property", normals_cls.FullName, constants.siDefaultPropagation, normal_name)
+                normals_prop = new_normals_prop[1][0]
+            xsi_normals = utils.transpose_vectors_array(normals)
+            normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
+
+    uvs_data = mesh_data.get("uvs", None)
+    if uvs_data is not None:
+        uvs_cls = None
+        if not is_mesh_empty:
+            find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates"
+            uvs_cls = app.Dictionary.GetObject(find_path, False)
+        for uv_data in uvs_data:
+            # get uvs in frame
+            uv_name = uv_data[0]
+            uv_coordinates = utils.get_closest_data(uv_data[1], 0 if frame is None else frame)
+            if uvs_cls is None:
+                uvs_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "UVCoordinates")
+            uv_prop = None
+            if not is_mesh_empty:
+                find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates." + uv_name
+                uv_prop = app.Dictionary.GetObject(find_path, False)
+            if uv_prop is None:
+                new_uv_prop = app.AddProp("Texture Projection", uvs_cls.FullName, constants.siDefaultPropagation, uv_name)
+                uv_prop = new_uv_prop[1][0]
+            uv_array = utils.transpose_2vectors_array(uv_coordinates)
+            uv_prop.Elements.Array = tuple([tuple(uv_array[0]), tuple(uv_array[1]), tuple([0]*len(uv_array[0]))])
+
+    colors_data = mesh_data.get("colors", None)
+    if colors_data is not None:
+        pass
+
+    weightmaps_data = mesh_data.get("weightmaps", None)
+    if weightmaps_data is not None:
+        pass
+
+    vertex_creases_data = mesh_data.get("vertex_creases", None)
+    if vertex_creases_data is not None:
+        pass
+
+    edge_creases_data = mesh_data.get("edge_creases", None)
+    if edge_creases_data is not None:
+        pass
 
 
 def set_geometry(xsi_geometry, usd_mesh, mesh_options):
@@ -342,7 +587,7 @@ def set_geometry(xsi_geometry, usd_mesh, mesh_options):
     usd_face_counts_array = usd_face_counts.Get()
     usd_face_indexes_array = usd_face_indexes.Get()
 
-    xsi_geometry.Set(utils.usd_to_xsi_vertex_array(usd_points_array), utils.usd_to_xsi_faces_array(usd_face_indexes_array, usd_face_counts_array))
+    xsi_geometry.Set(utils.transpose_vectors_array(usd_points_array), utils.usd_to_xsi_faces_array(usd_face_indexes_array, usd_face_counts_array))
 
 
 def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent):
@@ -359,7 +604,10 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
     if not is_animated:
         # simply apply geometry
         mesh_options["is_topology_change"] = True  # for non-operator approach we should create full topology
-        set_geometry(xsi_geometry, usd_mesh, mesh_options)
+        data_dict = {}
+        read_mesh_data(mesh_options, data_dict, usd_mesh=usd_mesh)
+        set_geometry_from_data(app, xsi_geometry, mesh_options, data_dict)
+        # set_geometry(xsi_geometry, usd_mesh, mesh_options)
     else:
         # create operator, which updates topology every frame
         operator = app.AddCustomOp("USDMeshOperator", xsi_mesh.ActivePrimitive, "", "USDMeshOperator")
