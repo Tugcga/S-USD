@@ -68,7 +68,8 @@ def USDImportCommand_Execute(*args):
     import_options = {"clear_scene": clear_scene,
                       "is_materials": is_materials,
                       "attributes": attributes,
-                      "object_types": object_types}
+                      "object_types": object_types,
+                      "XSIMath": XSIMath}
 
     imp.reload(import_processor)
     if os.path.isfile(file_path):

@@ -58,6 +58,12 @@ def is_animated_mesh(usd_mesh, attributes):
     return is_animated, is_topology_changed
 
 
+def is_animated_points(usd_points):
+    points_attr = usd_points.GetPointsAttr()
+    points_times = points_attr.GetTimeSamples()
+    return len(points_times) > 1
+
+
 # --------------------XSI specific----------------------------
 def get_plugin_path(app, plugin_name):
     plugins = app.Plugins
@@ -74,23 +80,45 @@ def is_stands(pc_object):
     return len(strands_data) > 0
 
 
+def vector3_to_string(vector):
+    return "(" + str(vector.X) + "," + str(vector.Y) + ", " + str(vector.Z) + ")"
+
+
+def are_arrays_differs(array_a, array_b):
+    for i in range(len(array_a)):
+        pos_a = array_a[i]
+        pos_b = array_b[i]
+        if pos_a != pos_b:
+            return True
+    return False
+
+
 def is_constant_topology(app, mesh, opt_anim, force_change_frame):
+    is_deformable = False
     if opt_anim is None:
-        return True
+        return True, False
     else:
         # get number of points at the first frame
         geo = mesh.GetActivePrimitive3(opt_anim[0]).GetGeometry3(opt_anim[0])
-        vertex_count = len(geo.Vertices)
+        start_vertices = [(v.Position.X, v.Position.Y, v.Position.Z) for v in geo.Vertices]
+        starr_vertex_count = len(start_vertices)
         # next iterate by other frames
         for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
             if force_change_frame:
                 app.SetValue("PlayControl.Current", frame, "")
                 app.SetValue("PlayControl.Key", frame, "")
             geo_frame = mesh.GetActivePrimitive3(frame).GetGeometry3(frame)
-            verts_frame = len(geo_frame.Vertices)
-            if vertex_count != verts_frame:
-                return False
-        return True
+            frame_vertices = [(v.Position.X, v.Position.Y, v.Position.Z) for v in geo_frame.Vertices]
+            verts_frame = len(frame_vertices)
+            if starr_vertex_count != verts_frame:
+                return False, True
+            else:
+                # the number of vertices are the same, check deformation
+                if is_deformable is False:
+                    # check the deformations
+                    is_deformable = are_arrays_differs(start_vertices, frame_vertices)
+
+        return True, is_deformable
 
 
 def vector_to_tuple(vector):

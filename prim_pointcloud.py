@@ -58,3 +58,104 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
             set_pointcloud_at_frame(pointcloud_object.GetActivePrimitive3(frame).GetGeometry3(frame), usd_points, usd_points_prim, frame=frame)
 
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
+
+
+def read_points(usd_pointcloud):
+    to_return = []
+    usd_points = usd_pointcloud.GetPointsAttr()
+    times = usd_points.GetTimeSamples()
+    sorted(times)
+    if len(times) <= 0:
+        to_return.append((0, usd_points.Get()))
+    else:
+        for frame in times:
+            points_at_frame = usd_points.Get(frame)
+            to_return.append((frame, points_at_frame))
+
+    return to_return
+
+
+def read_widths(usd_points):
+    to_return = []
+    usd_widths = usd_points.GetWidthsAttr()
+    times = usd_widths.GetTimeSamples()
+    sorted(times)
+    if len(times) <= 0:
+        to_return.append((0, usd_widths.Get()))
+    else:
+        for frame in times:
+            widths_at_frame = usd_widths.Get(frame)
+            to_return.append((frame, widths_at_frame))
+
+    return to_return
+
+
+def read_points_data(data_dict, file_path=None, points_path=None, usd_points=None):
+    if usd_points is None:
+        stage = Usd.Stage.Open(file_path)
+        usd_points = UsdGeom.Points(stage.GetPrimAtPath(points_path))
+    data_dict["points"] = read_points(usd_points)
+    data_dict["widths"] = read_widths(usd_points)
+
+
+def create_usd_load_tree(app, xsi_points):
+    # create attribute
+    point_attr_name = "usd_points"
+    xsi_points.AddICEAttribute(point_attr_name, 16, 2, 1)
+
+    # add ice-tree and connect nodes
+    tree = app.ApplyOp("ICETree", xsi_points.Parent.Parent, "siNode", "", "", 0)[0]
+    # delete all points
+    delete_point_node = app.AddICENode("$XSI_DSPRESETS\\ICENodes\\DeletePointNode", tree)
+    app.SetValue(delete_point_node.FullName + ".deleted", True, "")
+    app.ConnectICENodes(tree.FullName + ".port1", delete_point_node.FullName + ".execute")
+
+    # add points node
+    add_point_node = app.AddICENode("$XSI_DSPRESETS\\ICENodes\\AddPointNode", tree)
+    app.AddPortToICENode(tree.FullName + ".port1", "siNodePortDataInsertionLocationAfter")
+    app.ConnectICENodes(tree.FullName + ".port2", add_point_node.FullName + ".add")
+
+    # get from custom attribute
+    get_data_node = app.AddICENode("$XSI_DSPRESETS\\ICENodes\\GetDataNode", tree)
+    app.SetValue(get_data_node.FullName + ".reference", "self." + point_attr_name, "")
+    app.ConnectICENodes(add_point_node.FullName + ".positions1", get_data_node.FullName + ".value")
+
+    return tree
+
+
+def set_pointcloud_from_data(app, xsi_points, points_data, xsi_math, frame=None):
+    # set poit positions
+    if "points" in points_data and len(points_data["points"]) > 0:
+        points = utils.get_closest_data(points_data["points"], 0 if frame is None else frame)
+        points_array = []
+        for p in points:
+            points_array.append(xsi_math.CreateVector3(p[0], p[1], p[2]))
+
+        points_attr = xsi_points.GetICEAttributeFromName("usd_points")
+        points_attr.DataArray = [points_array]
+
+
+def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim, xsi_parent):
+    imp.reload(utils)
+    usd_points = UsdGeom.Points(usd_prim)
+    xsi_points = app.GetPrim("PointCloud", pointloud_name, xsi_parent)
+    utils.set_xsi_transform(app, xsi_points, usd_tfm)
+    utils.set_xsi_visibility(xsi_points, visibility)
+
+    tree = create_usd_load_tree(app, xsi_points.ActivePrimitive.Geometry)
+
+    if not utils.is_animated_points(usd_points):
+        points_data = {}
+        read_points_data(points_data, usd_points=usd_points)
+        xsi_geometry = xsi_points.ActivePrimitive.Geometry
+        set_pointcloud_from_data(app, xsi_geometry, points_data, options["XSIMath"])
+    else:
+        operator = app.AddCustomOp("USDPointsOperator", xsi_points.ActivePrimitive, "", "USDPointsOperator")
+        operator.Parameters("file_path").Value = options["file_path"]
+        operator.Parameters("points_path").Value = str(usd_prim.GetPath())
+        operator.AlwaysEvaluate = True
+
+        # swap ICE-tree and operator (ICE-tree should be at the top)
+        app.MoveOperatorAfter(xsi_points.ActivePrimitive, tree, operator)
+
+    return xsi_points

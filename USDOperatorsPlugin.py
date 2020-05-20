@@ -12,6 +12,7 @@ if __sipath__ not in sys.path:
     sys.path.append(__sipath__)
 import utils
 import prim_mesh
+import prim_pointcloud
 import imp
 
 
@@ -27,6 +28,7 @@ def XSILoadPlugin(in_reg):
 
     # RegistrationInsertionPoint - do not remove this line
     in_reg.RegisterOperator("USDMeshOperator")
+    in_reg.RegisterOperator("USDPointsOperator")
 
     return True
 
@@ -54,9 +56,24 @@ def USDMeshOperator_Define(in_ctxt):
     return True
 
 
+def USDPointsOperator_Define(in_ctxt):
+    operator = in_ctxt.Source
+    operator.AddParameter(xsi_factory.CreateParamDef("file_path", constants.siString, constants.siClassifUnknown, constants.siReadOnly, "file_path", "", ""))
+    operator.AddParameter(xsi_factory.CreateParamDef("points_path", constants.siString, constants.siClassifUnknown, constants.siReadOnly, "points_path", "", ""))
+    operator.AddParameter(xsi_factory.CreateParamDef2("active", constants.siBool, True))
+    operator.AddParameter(xsi_factory.CreateParamDef("frame_offset", constants.siInt4, constants.siClassifUnknown, constants.siPersistable + constants.siAnimatable, "frame_offset", "", 0, -2147483648, 2147483647, 0, 16))
+    return True
+
+
 def USDMeshOperator_DefineLayout(in_ctxt):
     layout = in_ctxt.Source
     USDMeshOperator_BuildUI(layout)
+    return True
+
+
+def USDPointsOperator_DefineLayout(in_ctxt):
+    layout = in_ctxt.Source
+    USDPointsOperator_BuildUI(layout)
     return True
 
 
@@ -67,7 +84,18 @@ def USDMeshOperator_Init(in_ctxt):
     return True
 
 
+def USDPointsOperator_Init(in_ctxt):
+    o_dict = Dispatch("Scripting.Dictionary")
+    o_dict["is_init"] = False
+    in_ctxt.UserData = o_dict
+    return True
+
+
 def USDMeshOperator_Term(in_ctxt):
+    return True
+
+
+def USDPointsOperator_Term(in_ctxt):
     return True
 
 
@@ -121,8 +149,34 @@ def USDMeshOperator_Update(in_ctxt):
     return True
 
 
+def USDPointsOperator_Update(in_ctxt):
+    imp.reload(utils)
+    imp.reload(prim_pointcloud)
+    file_path = in_ctxt.GetParameterValue("file_path")
+    points_path = in_ctxt.GetParameterValue("points_path")
+    is_active = in_ctxt.GetParameterValue("active")
+    frame_offset = in_ctxt.GetParameterValue("frame_offset")
+
+    if is_active:
+        xsi_geometry = in_ctxt.OutputTarget.Geometry
+        frame = utils.get_current_frame(app) + frame_offset
+        data_dict = in_ctxt.UserData
+        if data_dict["is_init"] is False:
+            prim_pointcloud.read_points_data(data_dict, file_path=file_path, points_path=points_path)
+            data_dict["is_init"] = True
+
+        prim_pointcloud.set_pointcloud_from_data(app, xsi_geometry, data_dict, XSIMath, frame)
+
+    return True
+
+
 def USDMeshOperator_OnInit():
     USDMeshOperator_BuildUI()
+    return True
+
+
+def USDPointsOperator_OnInit():
+    USDPointsOperator_BuildUI()
     return True
 
 
@@ -148,4 +202,19 @@ def USDMeshOperator_BuildUI(layout=None):
     layout.AddItem("is_cluster", "Clusters")
     layout.AddItem("is_vertex_creases", "Vertex Creases")
     layout.AddItem("is_edges_creases", "Edge Creases")
+    layout.EndGroup()
+
+
+def USDPointsOperator_BuildUI(layout=None):
+    if layout is None:
+        layout = PPG.PPGLayout
+    layout.Clear()
+    layout.AddGroup("Assets Path")
+    layout.AddItem("file_path", "File Path")
+    layout.AddItem("points_path", "Points Path")
+    layout.EndGroup()
+
+    layout.AddGroup("Options")
+    layout.AddItem("active", "Active")
+    layout.AddItem("frame_offset", "Frame Offset")
     layout.EndGroup()

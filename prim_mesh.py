@@ -240,13 +240,13 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
         if utils.build_material_identifier(xsi_mat) in material_to_usd:
             UsdShade.MaterialBindingAPI(usd_mesh_prim).Bind(material_to_usd[utils.build_material_identifier(main_material)])
 
-    is_constant = utils.is_constant_topology(app, mesh_object, params.get("animation", None), opt.get("force_change_frame", False))
+    is_constant, is_deformed = utils.is_constant_topology(app, mesh_object, params.get("animation", None), opt.get("force_change_frame", False))
 
     if opt.get("use_subdiv", False):
         usd_mesh.CreateSubdivisionSchemeAttr().Set("catmullClark")
     else:
         usd_mesh.CreateSubdivisionSchemeAttr().Set("none")
-    if opt_animation is None:
+    if opt_animation is None or not is_deformed:
         set_mesh_at_frame(app, ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
@@ -457,30 +457,31 @@ def read_clusters(usd_mesh):
 
 def read_mesh_data(mesh_options, data_dict, file_path=None, mesh_path=None, usd_mesh=None):
     # mesh_options = {"attributes": ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')}
-    if usd_mesh is None:
-        stage = Usd.Stage.Open(file_path)
-        usd_mesh = UsdGeom.Mesh(stage.GetPrimAtPath(mesh_path))
-    # we should get data of all attributes from usd_mesh and save it to data_dict by different keys
-    # animated format is the following: it is an array of tuples [(frame, data at frame), ...]
-    # if there is only one frame (or zero), then data is an one-element array [(0, data)]
-    data_dict["points"] = read_points(usd_mesh)
-    data_dict["face_sizes"] = read_face_sizes(usd_mesh)
-    data_dict["face_indexes"] = read_face_indexes(usd_mesh)
-    attrs = mesh_options.get("attributes", [])
-    if "normal" in attrs:
-        data_dict["normals"] = read_normals(usd_mesh)
-    if "uvmap" in attrs:
-        data_dict["uvs"] = read_uvs(usd_mesh)
-    if "color" in attrs:
-        data_dict["colors"] = read_vertex_colors(usd_mesh)
-    if "weightmap" in attrs:
-        data_dict["weightmaps"] = read_weightmaps(usd_mesh)
-    if "vertex_creases" in attrs:
-        data_dict["vertex_creases"] = read_vertex_creases(usd_mesh)
-    if "edge_creases" in attrs:
-        data_dict["edge_creases"] = read_edges_creases(usd_mesh)
-    if "cluster" in attrs:
-        data_dict["cluster"] = read_clusters(usd_mesh)
+    if usd_mesh is not None or (file_path is not None and mesh_path is not None):
+        if usd_mesh is None:
+            stage = Usd.Stage.Open(file_path)
+            usd_mesh = UsdGeom.Mesh(stage.GetPrimAtPath(mesh_path))
+        # we should get data of all attributes from usd_mesh and save it to data_dict by different keys
+        # animated format is the following: it is an array of tuples [(frame, data at frame), ...]
+        # if there is only one frame (or zero), then data is an one-element array [(0, data)]
+        data_dict["points"] = read_points(usd_mesh)
+        data_dict["face_sizes"] = read_face_sizes(usd_mesh)
+        data_dict["face_indexes"] = read_face_indexes(usd_mesh)
+        attrs = mesh_options.get("attributes", [])
+        if "normal" in attrs:
+            data_dict["normals"] = read_normals(usd_mesh)
+        if "uvmap" in attrs:
+            data_dict["uvs"] = read_uvs(usd_mesh)
+        if "color" in attrs:
+            data_dict["colors"] = read_vertex_colors(usd_mesh)
+        if "weightmap" in attrs:
+            data_dict["weightmaps"] = read_weightmaps(usd_mesh)
+        if "vertex_creases" in attrs:
+            data_dict["vertex_creases"] = read_vertex_creases(usd_mesh)
+        if "edge_creases" in attrs:
+            data_dict["edge_creases"] = read_edges_creases(usd_mesh)
+        if "cluster" in attrs:
+            data_dict["cluster"] = read_clusters(usd_mesh)
 
 
 def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=None):
@@ -508,6 +509,59 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         if "cluster" in attrs:
             for cluster_data in mesh_data["cluster"]:
                 xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+
+        # creases import only at one frame, because at other frames it creates too many crese operator
+        vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
+        if "vertex_creases" in attrs and vertex_creases_data is not None and len(vertex_creases_data) > 0:
+            vertex_creases = utils.get_closest_data(vertex_creases_data, 0 if frame is None else frame)  # array of the pairs (index, value)
+            vertices = xsi_geometry.Vertices
+            name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".pnt"
+            creases_dict = {}
+            for vert in vertices:
+                data_index = utils.get_index_in_array_for_value(vertex_creases, vert.Index)
+                if data_index is not None:
+                    crease_value = vertex_creases[data_index][1]
+                    is_find = False
+                    for crease_key in creases_dict.keys():
+                        if abs(crease_key - crease_value) < 0.01:
+                            is_find = True
+                            creases_dict[crease_key].append(vert.Index)
+                    if not is_find:
+                        creases_dict[crease_value] = [vert.Index]
+            for crease_key in creases_dict.keys():
+                a = creases_dict[crease_key]
+                if len(a) > 0:
+                    op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(a), 3, constants.siPersistentOperation)
+                    op[0].Parameters("CreaseValue").Value = crease_key
+
+        edge_creases_data = utils.get_in_dict(mesh_data, "edge_creases")
+        if "edge_creases" in attrs and edge_creases_data is not None and len(edge_creases_data) > 0:
+            edges_creases = utils.get_closest_data(edge_creases_data, 0 if frame is None else frame)  # array of triplets [(s, e, value), ...]
+            mesh_edges = xsi_geometry.Edges
+            name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".edge"
+            # set crease value to each edge separatly
+            creases_dict = {}  # store edge indexes for different values (epsilon = 0.001)
+            for edge in mesh_edges:
+                edge_verts = edge.Vertices
+                v0 = edge_verts[0].Index
+                v1 = edge_verts[1].Index
+                data_index = utils.get_index_in_array_for_pair(edges_creases, v0, v1)
+                if data_index is not None:
+                    crease_value = edges_creases[data_index][2]
+                    # find in the dict
+                    is_find = False
+                    for crease_key in creases_dict.keys():
+                        if abs(crease_key - crease_value) < 0.01:
+                            is_find = True
+                            creases_dict[crease_key].append(edge.Index)
+                    if not is_find:
+                        creases_dict[crease_value] = [edge.Index]
+            # apply crease operator for each array in the dict
+            for crease_key in creases_dict.keys():
+                a = creases_dict[crease_key]
+                if len(a) > 0:
+                    op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(creases_dict[crease_key]), 3, constants.siPersistentOperation)
+                    op[0].Parameters("CreaseValue").Value = crease_key
         is_mesh_empty = True
     else:
         # set only point positions
@@ -600,58 +654,6 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
                 new_w_prop = app.CreateWeightMap("", weight_cls.FullName, weight_name, "", False)
                 w_prop = new_w_prop[0]
             w_prop.Elements.Array = [w for w in weights]
-
-    vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
-    if "vertex_creases" in attrs and vertex_creases_data is not None and len(vertex_creases_data) > 0:
-        vertex_creases = utils.get_closest_data(vertex_creases_data, 0 if frame is None else frame)  # array of the pairs (index, value)
-        vertices = xsi_geometry.Vertices
-        name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".pnt"
-        creases_dict = {}
-        for vert in vertices:
-            data_index = utils.get_index_in_array_for_value(vertex_creases, vert.Index)
-            if data_index is not None:
-                crease_value = vertex_creases[data_index][1]
-                is_find = False
-                for crease_key in creases_dict.keys():
-                    if abs(crease_key - crease_value) < 0.01:
-                        is_find = True
-                        creases_dict[crease_key].append(vert.Index)
-                if not is_find:
-                    creases_dict[crease_value] = [vert.Index]
-        for crease_key in creases_dict.keys():
-            a = creases_dict[crease_key]
-            if len(a) > 0:
-                op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(a), 3, constants.siPersistentOperation)
-                op[0].Parameters("CreaseValue").Value = crease_key
-
-    edge_creases_data = utils.get_in_dict(mesh_data, "edge_creases")
-    if "edge_creases" in attrs and edge_creases_data is not None and len(edge_creases_data) > 0:
-        edges_creases = utils.get_closest_data(edge_creases_data, 0 if frame is None else frame)  # array of triplets [(s, e, value), ...]
-        mesh_edges = xsi_geometry.Edges
-        name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".edge"
-        # set crease value to each edge separatly
-        creases_dict = {}  # store edge indexes for different values (epsilon = 0.001)
-        for edge in mesh_edges:
-            edge_verts = edge.Vertices
-            v0 = edge_verts[0].Index
-            v1 = edge_verts[1].Index
-            data_index = utils.get_index_in_array_for_pair(edges_creases, v0, v1)
-            if data_index is not None:
-                crease_value = edges_creases[data_index][2]
-                # find in the dict
-                is_find = False
-                for crease_key in creases_dict.keys():
-                    if abs(crease_key - crease_value) < 0.01:
-                        is_find = True
-                        creases_dict[crease_key].append(edge.Index)
-                if not is_find:
-                    creases_dict[crease_value] = [edge.Index]
-        # apply crease operator for each array in the dict
-        for crease_key in creases_dict.keys():
-            a = creases_dict[crease_key]
-            if len(a) > 0:
-                op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(creases_dict[crease_key]), 3, constants.siPersistentOperation)
-                op[0].Parameters("CreaseValue").Value = crease_key
 
 
 def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent):
