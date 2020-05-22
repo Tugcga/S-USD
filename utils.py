@@ -287,6 +287,13 @@ def get_file_name(full_name):
     return ".".join(parts[:-1])
 
 
+def get_file_name_from_path(file_path):
+    '''from a/b/c/d/name.xyz return name
+    '''
+    path_head, path_tail = os.path.split(file_path)  # head = a/b/c/d/ tail = name.xyz
+    return get_file_name(path_tail)
+
+
 def remove_first_folder(path):
     '''transform the path a/b/c/d to a/c/d
     '''

@@ -18,6 +18,7 @@ def import_usd(app, file_path, options):
     options["instances"] = {}  # key - path of the imported master object, value - link to the corresponding xsi-object
     options["file_path"] = file_path
     options["project_path"] = app.ActiveProject3.Path
+    options["file_name"] = utils.get_file_name_from_path(file_path)  # without extension
     last_object_to_remove = None
     if is_clear:
         scene_root = app.ActiveProject2.ActiveScene.Root
