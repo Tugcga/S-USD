@@ -2,6 +2,7 @@ from win32com.client import constants
 from pxr import Usd
 import utils
 import prim_xform
+import prim_hair
 import prim_mesh
 import prim_pointcloud
 import imp
@@ -12,6 +13,7 @@ def import_usd(app, file_path, options):
     imp.reload(prim_xform)
     imp.reload(prim_mesh)
     imp.reload(prim_pointcloud)
+    imp.reload(prim_hair)
     is_clear = options.get("clear_scene", False)
     options["instances"] = {}  # key - path of the imported master object, value - link to the corresponding xsi-object
     options["file_path"] = file_path
@@ -87,7 +89,9 @@ def emit_item(app, options, usd_item, xsi_parent, predefined_name=None, predefin
     elif item_type == "Mesh" and constants.siPolyMeshType in options["object_types"]:
         new_object = prim_mesh.emit_mesh(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
     elif item_type == "Points" and "pointcloud" in options["object_types"]:
-        new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
+        new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, False, xsi_parent)
+    elif item_type == "BasisCurves" and "strands" in options["object_types"]:
+        new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, True, xsi_parent)
 
     return new_object
 
@@ -143,6 +147,8 @@ def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
                     new_object = emit_item(app, options, childrens["Mesh"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "Points" and "pointcloud" in options["object_types"]:
                     new_object = emit_item(app, options, childrens["Points"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                elif ess_comp_names[0] == "BasisCurves" and "strands" in options["object_types"]:
+                    new_object = emit_item(app, options, childrens["BasisCurves"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
             else:
                 # current is Xform, but it contains either several essential components, or one component but with transform
                 # in this case we should create the null and all subcomponents emit as separate objects

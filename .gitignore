@@ -5,3 +5,4 @@ __pycache__
 pxr
 export.props
 import.props
+*.icecache

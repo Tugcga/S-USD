@@ -428,3 +428,15 @@ def get_in_dict(dict, key, default=None):
         return dict[key]
     else:
         return default
+
+
+def extract_subarray(array, array_of_steps):
+    '''if array = [1, 2, 3, 4, 5, 6, 7, 8, 9] and array_of_steps = [3, 2, 3]
+    it returns [1, 4, 6]
+    '''
+    to_return = []
+    index = 0
+    for step in array_of_steps:
+        to_return.append(array[index])
+        index += step
+    return to_return

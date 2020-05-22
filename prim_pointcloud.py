@@ -62,15 +62,16 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
 
 
-def write_ice_cache_at_frame(folder_path, object_name, points_data, width_data, frame=None):
+def write_ice_cache_at_frame(folder_path, object_name, points_data, width_data, strands_data, frame=None):
     nb_particles = len(points_data)
     ic = icecache.icecache(nb_particles)
     ic.addPointPosition(points_data)
     ic.addScalar("Size", width_data)
+    # ic.addVector3("StrandPosition", strands_data)
     ic.write(folder_path + object_name + ("_" + str(frame) if frame is not None else "") + ".icecache")
 
 
-def write_ice_cache(usd_pointcloud, xsi_object, project_path):
+def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path):
     folder_path = project_path + "\\Simulation\\usd_cache\\"
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
@@ -80,17 +81,35 @@ def write_ice_cache(usd_pointcloud, xsi_object, project_path):
     usd_width = usd_pointcloud.GetWidthsAttr()
     width_times = usd_width.GetTimeSamples()
 
+    if is_strands:
+        usd_segments = usd_pointcloud.GetCurveVertexCountsAttr()
+        segments_times = usd_segments.GetTimeSamples()
+
     is_constant_points = len(point_times) <= 1
     is_constant_widths = len(width_times) <= 1
+    if is_strands:
+        is_constant_segments = len(segments_times) <= 1
 
     if is_constant_points:
         points_data = usd_points.Get()
+        # for strands we use as point positions onlt each segment poit
+        if is_strands:
+            if is_constant_segments:
+                segments_data = usd_segments.Get()
+            else:
+                segments_data = usd_segments.Get(0)
+            # extract strands data
+            strands_data = [v for v in points_data]
+            points_data = utils.extract_subarray(points_data, segments_data)
         # get the first width values
         if is_constant_widths:
             width_data = usd_width.Get()
         else:
             width_data = usd_width.Get(width_times[0])
-        write_ice_cache_at_frame(folder_path, xsi_object.Name, points_data, width_data)
+
+        if is_strands:
+            width_data = utils.extract_subarray(width_data, segments_data)
+        write_ice_cache_at_frame(folder_path, xsi_object.Name, points_data, width_data, strands_data)
     else:
         for frame in point_times:
             points_data = usd_points.Get(frame)
@@ -99,7 +118,7 @@ def write_ice_cache(usd_pointcloud, xsi_object, project_path):
             else:
                 # here we assume that animation samples of the width are the same as for points
                 width_data = usd_width.Get(frame)
-            write_ice_cache_at_frame(folder_path, xsi_object.Name, points_data, width_data, frame=int(frame + 0.5))
+            write_ice_cache_at_frame(folder_path, xsi_object.Name, points_data, width_data, None, frame=int(frame + 0.5))
     return is_constant_points
 
 
@@ -118,14 +137,14 @@ def build_ice_tree(app, xsi_points, is_constant):
     app.ConnectICENodes(tree.FullName + ".port1", node.FullName + ".execute")
 
 
-def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim, xsi_parent):
+def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim, is_strands, xsi_parent):
     imp.reload(utils)
-    usd_points = UsdGeom.Points(usd_prim)
+    usd_object = UsdGeom.BasisCurves(usd_prim) if is_strands else UsdGeom.Points(usd_prim)
     xsi_points = app.GetPrim("PointCloud", pointloud_name, xsi_parent)
     utils.set_xsi_transform(app, xsi_points, usd_tfm)
     utils.set_xsi_visibility(xsi_points, visibility)
     if "project_path" in options:
-        is_constant = write_ice_cache(usd_points, xsi_points, options["project_path"])
+        is_constant = write_ice_cache(usd_object, is_strands, xsi_points, options["project_path"])
         # build ice-tree with caching node
         build_ice_tree(app, xsi_points, is_constant)
 
