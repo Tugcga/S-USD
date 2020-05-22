@@ -22,7 +22,7 @@ def set_pointcloud_at_frame(pointcloud_geometry, usd_pointcloud, usd_points_prim
 
     for index in range(len(xsi_pp_data)):
         data_points.append(utils.vector_to_tuple(xsi_pp_data[index]))
-        data_width.append(xsi_size_data[index])
+        data_width.append(xsi_size_data[index] if index < len(xsi_size_data) else 0.0)
 
     if frame is None:
         usd_points.Set(data_points)
@@ -51,7 +51,7 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
 
     materials.add_material(materials_opt, pointcloud_object.Material, ref_stage, ref_stage_asset, usd_xform, usd_points_prim)
 
-    if opt_animation is None:
+    if opt_animation is None or not utils.is_poincloud_animated(pointcloud_object, opt_animation):
         set_pointcloud_at_frame(pointcloud_object.GetActivePrimitive3().Geometry, usd_points, usd_points_prim)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):

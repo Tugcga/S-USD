@@ -1,33 +1,50 @@
 from pxr import Usd, UsdLux, UsdShade
 from prim_xform import add_xform
 import materials
+import utils
 import imp
 
 
-def set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame=None):
+def set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame=None, change_keys=None):
     if xsi_light_type == 0 and xsi_geom_type == 1:  # rectangular light
         if frame is None:
             usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
             usd_light.CreateHeightAttr().Set(xsi_light.Parameters("LightAreaXformSY").Value)
         else:
-            usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
-            usd_light.CreateHeightAttr().Set(xsi_light.Parameters("LightAreaXformSY").Value, Usd.TimeCode(frame))
+            if change_keys[0]:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").GetValue(frame), Usd.TimeCode(frame))
+            else:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
+            if change_keys[1]:
+                usd_light.CreateHeightAttr().Set(xsi_light.Parameters("LightAreaXformSY").GetValue(frame), Usd.TimeCode(frame))
+            else:
+                usd_light.CreateHeightAttr().Set(xsi_light.Parameters("LightAreaXformSY").Value)
     if xsi_light_type == 0 and (xsi_geom_type == 2 or xsi_geom_type == 3):  # disc or sphere light
         if frame is None:
             usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
         else:
-            usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
+            if change_keys[0]:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").GetValue(frame), Usd.TimeCode(frame))
+            else:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
     if xsi_light_type == 0 and xsi_geom_type == 4:  # cylinder light
         if frame is None:
             usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
             usd_light.CreateLengthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").Value)
         else:
-            usd_light.CreateRadiusAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value, Usd.TimeCode(frame))
-            usd_light.CreateLengthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").Value, Usd.TimeCode(frame))
+            if change_keys[0]:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").GetValue(frame), Usd.TimeCode(frame))
+            else:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSX").Value)
+            if change_keys[2]:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").GetValue(frame), Usd.TimeCode(frame))
+            else:
+                usd_light.CreateWidthAttr().Set(xsi_light.Parameters("LightAreaXformSZ").Value)
 
 
 def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # here me add only basic parameters, all other will be defined in the material
     imp.reload(materials)
+    imp.reload(utils)
     # basic transform
     usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, xsi_light, root_path)
     # get the type of the light
@@ -78,11 +95,12 @@ def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # he
 
         # set animated parameters
         opt_animation = params["animation"]
-        if opt_animation is None:
+        changes_size_key = [False, False, False]  # for x, y and z. If True, then this dimension is changed by animation
+        if opt_animation is None or not utils.is_area_light_animated(xsi_light, opt_animation, changes_size_key):
             set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light)
-        if opt_animation is not None:
+        else:
             for frame in range(opt_animation[0], opt_animation[1] + 1):
-                set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame)
+                set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame=frame, change_keys=changes_size_key)
     ref_stage.Save()
 
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
@@ -102,7 +120,7 @@ def set_specular(usd_light, value, anim_opt):
 
 def set_intensity(usd_light, xsi_param, anim_opt):
     attr = usd_light.CreateIntensityAttr()
-    if anim_opt is None:
+    if anim_opt is None or not utils.is_param_animated(xsi_param, anim_opt):
         attr.Set(xsi_param.Value)
     else:
         for frame in range(anim_opt[0], anim_opt[1] + 1):
@@ -111,7 +129,7 @@ def set_intensity(usd_light, xsi_param, anim_opt):
 
 def set_distance_angle(usd_light, xsi_param, anim_opt):
     attr = usd_light.CreateAngleAttr()
-    if anim_opt is None:
+    if anim_opt is None or not utils.is_param_animated(xsi_param, anim_opt):
         attr.Set(xsi_param.Value)
     else:
         for frame in range(anim_opt[0], anim_opt[1] + 1):
@@ -120,7 +138,7 @@ def set_distance_angle(usd_light, xsi_param, anim_opt):
 
 def set_radius(usd_light, xsi_param, anim_opt):
     attr = usd_light.CreateRadiusAttr()
-    if anim_opt is None:
+    if anim_opt is None or not utils.is_param_animated(xsi_param, anim_opt):
         attr.Set(xsi_param.Value)
     else:
         for frame in range(anim_opt[0], anim_opt[1] + 1):
@@ -129,7 +147,7 @@ def set_radius(usd_light, xsi_param, anim_opt):
 
 def set_ellipse_radius(usd_light, xsi_param_width, xsi_param_height, anim_opt):
     attr = usd_light.CreateRadiusAttr()
-    if anim_opt is None:
+    if anim_opt is None or not (utils.is_param_animated(xsi_param_width, anim_opt) or utils.is_param_animated(xsi_param_height, anim_opt)):
         attr.Set((xsi_param_width.Value + xsi_param_height.Value) / 2)
     else:
         for frame in range(anim_opt[0], anim_opt[1] + 1):
@@ -138,13 +156,17 @@ def set_ellipse_radius(usd_light, xsi_param_width, xsi_param_height, anim_opt):
 
 def set_rect_size(usd_light, xsi_param_width, xsi_param_height, anim_opt):
     attr_width = usd_light.CreateWidthAttr()
-    attr_heigh = usd_light.CreateHeightAttr()
-    if anim_opt is None:
+    if anim_opt is None or not utils.is_param_animated(xsi_param_width, anim_opt):
         attr_width.Set(xsi_param_width.Value)
-        attr_heigh.Set(xsi_param_height.Value)
     else:
         for frame in range(anim_opt[0], anim_opt[1] + 1):
             attr_width.Set(xsi_param_width.GetValue(frame), Usd.TimeCode(frame))
+
+    attr_heigh = usd_light.CreateHeightAttr()
+    if anim_opt is None or not utils.is_param_animated(xsi_param_height, anim_opt):
+        attr_heigh.Set(xsi_param_height.Value)
+    else:
+        for frame in range(anim_opt[0], anim_opt[1] + 1):
             attr_heigh.Set(xsi_param_height.GetValue(frame), Usd.TimeCode(frame))
 
 

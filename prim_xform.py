@@ -4,7 +4,7 @@ import imp
 
 
 def add_transform_to_xfo(usd_xform, obj, opt_anim):
-    if opt_anim is None:
+    if opt_anim is None or not utils.is_transform_animated(obj, opt_anim):
         usd_xform.AddTransformOp().Set(utils.build_transform(obj))
     else:
         usd_tfm = usd_xform.AddTransformOp()
@@ -21,7 +21,6 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, 
     imp.reload(utils)
     # we should create a new stage and reference the old one to this new
     opt_animation = params.get("animation", None)
-    # xsi_vis_prop = obj.Properties("Visibility")
     if create_ref:
         new_stage_name = obj.FullName + "." + utils.get_extension_from_params(params)
         stage_asset_path = path_for_objects + new_stage_name
@@ -37,11 +36,9 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, 
             ref.SetInstanceable(True)
         refXform = UsdGeom.Xformable(ref)
         add_visibility_to_xfo(refXform, obj)
-        # refXform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
     else:
         usd_xform = UsdGeom.Xform.Define(stage, root_path + "/" + obj.Name)
         add_visibility_to_xfo(usd_xform, obj)
-        # usd_xform.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
 
     if create_ref:
         add_transform_to_xfo(refXform, obj, opt_animation)

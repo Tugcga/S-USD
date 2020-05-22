@@ -1,5 +1,8 @@
 from pxr import UsdGeom, Gf
 import os
+import math
+
+EPSILON = 0.0001
 
 
 # --------------------USD specific----------------------------
@@ -84,13 +87,182 @@ def vector3_to_string(vector):
     return "(" + str(vector.X) + "," + str(vector.Y) + ", " + str(vector.Z) + ")"
 
 
-def are_arrays_differs(array_a, array_b):
+def is_tuple3_arrays_are_different(array_a, array_b):
+    # array_a and  array_b are arrays of 3-tuples
     for i in range(len(array_a)):
         pos_a = array_a[i]
         pos_b = array_b[i]
-        if pos_a != pos_b:
+        if ((pos_a[0] - pos_b[0])**2 + (pos_a[1] - pos_b[1])**2 + (pos_a[2] - pos_b[2])**2) > EPSILON:
             return True
     return False
+
+
+def is_float_arrays_are_different(array_a, array_b):
+    if len(array_a) != len(array_b):
+        return True
+    else:
+        for i in range(len(array_a)):
+            if abs(array_a[i] - array_b[i]) > EPSILON:
+                return True
+        return False
+
+
+def get_distance(start, end):
+    return math.sqrt((start.X - end.X)**2 + (start.Y - end.Y)**2 + (start.Z - end.Z)**2)
+
+
+def is_matrices_are_different(matrix_a, matrix_b):
+    return abs(matrix_a.Value(0, 0) - matrix_b.Value(0, 0)) > EPSILON or\
+           abs(matrix_a.Value(0, 1) - matrix_b.Value(0, 1)) > EPSILON or\
+           abs(matrix_a.Value(0, 2) - matrix_b.Value(0, 2)) > EPSILON or\
+           abs(matrix_a.Value(0, 3) - matrix_b.Value(0, 3)) > EPSILON or\
+           abs(matrix_a.Value(1, 0) - matrix_b.Value(1, 0)) > EPSILON or\
+           abs(matrix_a.Value(1, 1) - matrix_b.Value(1, 1)) > EPSILON or\
+           abs(matrix_a.Value(1, 2) - matrix_b.Value(1, 2)) > EPSILON or\
+           abs(matrix_a.Value(1, 3) - matrix_b.Value(1, 3)) > EPSILON or\
+           abs(matrix_a.Value(2, 0) - matrix_b.Value(2, 0)) > EPSILON or\
+           abs(matrix_a.Value(2, 1) - matrix_b.Value(2, 1)) > EPSILON or\
+           abs(matrix_a.Value(2, 2) - matrix_b.Value(2, 2)) > EPSILON or\
+           abs(matrix_a.Value(2, 3) - matrix_b.Value(2, 3)) > EPSILON or\
+           abs(matrix_a.Value(3, 0) - matrix_b.Value(3, 0)) > EPSILON or\
+           abs(matrix_a.Value(3, 1) - matrix_b.Value(3, 1)) > EPSILON or\
+           abs(matrix_a.Value(3, 2) - matrix_b.Value(3, 2)) > EPSILON or\
+           abs(matrix_a.Value(3, 3) - matrix_b.Value(3, 3)) > EPSILON
+
+
+def is_transform_animated(xsi_obj, opt_anim):
+    if opt_anim is None:
+        return False
+    else:
+        # get start transform matrix
+        start_matrix = xsi_obj.Kinematics.Local.Transform.Matrix4
+        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            # transfrom at frame
+            frame_matrix = xsi_obj.Kinematics.Local.GetTransform2(frame).Matrix4
+            if is_matrices_are_different(start_matrix, frame_matrix):
+                return True
+        return False
+
+
+def is_focallength_animated(xsi_camera, opt_anim):
+    if opt_anim is None:
+        return False
+    else:
+        start_value = xsi_camera.Parameters("projplanedist").Value
+        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            frame_value = xsi_camera.Parameters("projplanedist").GetValue2(frame)
+            if abs(start_value - frame_value) > EPSILON:
+                return True
+        return False
+
+
+def is_focusdistance_animated(xsi_camera, opt_anim):
+    if opt_anim is None:
+        return False
+    else:
+        xsi_interest = xsi_camera.Interest
+        start_pos = xsi_camera.Kinematics.Global.Transform.Translation
+        start_interest = xsi_interest.Kinematics.Global.Transform.Translation
+        start_distance = get_distance(start_pos, start_interest)
+        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            frame_pos = xsi_camera.Kinematics.Global.GetTransform2(frame).Translation
+            frame_interest = xsi_interest.Kinematics.Global.GetTransform2(frame).Translation
+            frame_distance = get_distance(frame_pos, frame_interest)
+            if abs(start_distance - frame_distance) > EPSILON:
+                return True
+        return False
+
+
+def is_poincloud_animated(xsi_pc, opt_anim, check_strands=False):
+    # here we check only point positions and size attribute
+    # return tru, if at least one of them are varying through time
+    if opt_anim is None:
+        return False
+    else:
+        # get attributes at start
+        start_geo = xsi_pc.GetActivePrimitive3().Geometry
+        start_pp_attr = start_geo.GetICEAttributeFromName("PointPosition")
+        start_size_attr = start_geo.GetICEAttributeFromName("Size")
+        start_pp_data = start_pp_attr.DataArray
+        start_size_data = start_size_attr.DataArray
+        if check_strands:
+            start_sp_attr = start_geo.GetICEAttributeFromName("StrandPosition")
+            start_sp_data = start_sp_attr.DataArray2D
+        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            # get attributes at frame
+            frame_geo = xsi_pc.GetActivePrimitive3(frame).GetGeometry3(frame)
+            frame_pp_attr = frame_geo.GetICEAttributeFromName("PointPosition")
+            frame_size_attr = frame_geo.GetICEAttributeFromName("Size")
+            frame_pp_data = frame_pp_attr.DataArray
+            frame_size_data = frame_size_attr.DataArray
+            if check_strands:
+                frame_sp_attr = frame_geo.GetICEAttributeFromName("StrandPosition")
+                frame_sp_data = frame_sp_attr.DataArray2D
+            if len(start_pp_data) != len(frame_pp_data) or len(start_size_data) != len(frame_size_data) or (check_strands is True and len(start_sp_data) > 0 and len(frame_sp_data) > 0 and len(start_sp_data[0]) != len(frame_sp_data[0])):
+                # different sizes, so - animated
+                return True
+            else:
+                # both arrays have the same length, check values
+                for i in range(len(start_pp_data)):
+                    if get_distance(start_pp_data[i], frame_pp_data[i]) > EPSILON:
+                        return True
+                for i in range(len(start_size_data)):
+                    if abs(start_size_data[i] - frame_size_data[i]) > EPSILON:
+                        return True
+                if check_strands:
+                    for j in range(len(start_sp_data[i])):
+                        if get_distance(start_sp_data[i][j], frame_sp_data[i][j]) > EPSILON:
+                            return True
+
+        return False
+
+
+def is_hair_animated(app, xsi_hair, opt_anim):
+    if opt_anim is None:
+        return False
+    else:
+        start_pos, start_length, start_width = app.GetHairData(xsi_hair)
+        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            frame_pos, frame_length, frame_width = app.GetHairData(xsi_hair, frame)
+            if is_float_arrays_are_different(start_pos, frame_pos) or is_float_arrays_are_different(start_length, frame_length) or is_float_arrays_are_different(start_width, frame_width):
+                return True
+
+        return False
+
+
+def is_area_light_animated(xsi_light, opt_anim, change_keys):
+    if opt_anim is None:
+        return False
+    else:
+        start_x = xsi_light.Parameters("LightAreaXformSX").Value
+        start_y = xsi_light.Parameters("LightAreaXformSY").Value
+        start_z = xsi_light.Parameters("LightAreaXformSZ").Value
+        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            frame_x = xsi_light.Parameters("LightAreaXformSX").GetValue(frame)
+            frame_y = xsi_light.Parameters("LightAreaXformSY").GetValue(frame)
+            frame_z = xsi_light.Parameters("LightAreaXformSZ").GetValue(frame)
+            if abs(frame_x - start_x) > EPSILON:
+                change_keys[0] = True
+            if abs(frame_y - start_y) > EPSILON:
+                change_keys[1] = True
+            if abs(frame_z - start_z) > EPSILON:
+                change_keys[2] = True
+            if change_keys[0] and change_keys[1] and change_keys[2]:
+                return True
+        return change_keys[0] or change_keys[1] or change_keys[2]
+
+
+def is_param_animated(xsi_param, opt_anim):
+    if opt_anim is None:
+        return False
+    else:
+        start_value = xsi_param.Value
+        for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+            frame_value = xsi_param.GetValue(frame)
+            if abs(frame_value - start_value) > EPSILON:
+                return True
+
+        return False
 
 
 def is_constant_topology(app, mesh, opt_anim, force_change_frame):
@@ -116,7 +288,7 @@ def is_constant_topology(app, mesh, opt_anim, force_change_frame):
                 # the number of vertices are the same, check deformation
                 if is_deformable is False:
                     # check the deformations
-                    is_deformable = are_arrays_differs(start_vertices, frame_vertices)
+                    is_deformable = is_tuple3_arrays_are_different(start_vertices, frame_vertices)
 
         return True, is_deformable
 
@@ -270,7 +442,10 @@ def from_scene_path_to_models_path(path):
     # change extension in the file name
     name_parts = path_tail.split(".")
     file_name = ".".join(name_parts[:-1]) + ".usda"
-    return models_path + file_name
+
+    to_return = models_path + file_name
+    print("[USD export]: Save to " + to_return)
+    return to_return
 
 
 def get_last_folder(path):

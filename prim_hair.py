@@ -57,7 +57,7 @@ def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root
     materials.add_material(materials_opt, xsi_hair.Material, ref_stage, ref_stage_asset, usd_xform, usd_curves_prim)
 
     opt_animation = params.get("animation", None)
-    if opt_animation is None:
+    if opt_animation is None or not utils.is_hair_animated(app, xsi_hair, opt_animation):
         set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
@@ -107,7 +107,7 @@ def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, roo
     materials.add_material(materials_opt, xsi_pc.Material, ref_stage, ref_stage_asset, usd_xform, usd_curves_prim)
 
     opt_animation = params.get("animation", None)
-    if opt_animation is None:
+    if opt_animation is None or not utils.is_poincloud_animated(xsi_pc, opt_animation, check_strands=True):
         set_strands_at_frame(xsi_pc.GetActivePrimitive3().Geometry, usd_curves, usd_curves_prim)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):

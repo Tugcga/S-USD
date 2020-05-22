@@ -4,6 +4,9 @@ import prim_xform
 import utils
 import imp
 
+# -------------------------------------------------------------
+# -------------------export------------------------------------
+
 
 def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=None, force_frame=False):
     if frame is not None and force_frame:
@@ -256,6 +259,10 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
     ref_stage.Save()
 
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
+
+
+# -------------------------------------------------------------
+# -------------------import------------------------------------
 
 
 def read_points(usd_mesh):
