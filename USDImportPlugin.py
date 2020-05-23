@@ -52,6 +52,7 @@ def USDImportCommand_Init(in_ctxt):
     args.Add("object_types")
     args.Add("clear_scene")
     args.Add("is_materials")
+    args.Add("light_mode")
 
     return True
 
@@ -64,11 +65,13 @@ def USDImportCommand_Execute(*args):
     object_types = args[2] if args[2] is not None else ("strands", constants.siModelType, constants.siNullPrimType, constants.siPolyMeshType, constants.siLightPrimType, constants.siCameraPrimType, "pointcloud")
     clear_scene = args[3] if args[3] is not None else True
     is_materials = args[4] if args[4] is not None else True
+    light_mode = args[5] if args[5] is not None else 0  # default light mode use default lights
 
     import_options = {"clear_scene": clear_scene,
                       "is_materials": is_materials,
                       "attributes": attributes,
                       "object_types": object_types,
+                      "light_mode": light_mode,
                       "XSIMath": XSIMath}
 
     imp.reload(import_processor)
@@ -105,7 +108,8 @@ def USDImportOpen_Execute():
                         "is_clusters": True,
                         "is_vertex_creases": True,
                         "is_edge_creases": True,
-                        "is_vertex_color": True}
+                        "is_vertex_color": True,
+                        "light_mode": 0}
 
     # create property
     prop = scene_root.AddProperty("CustomProperty", False, "USD_Import")
@@ -145,6 +149,9 @@ def USDImportOpen_Execute():
     param = prop.AddParameter3("is_edge_creases", constants.siBool, import_props["is_edge_creases"])
     param.Animatable = False
     param = prop.AddParameter3("is_vertex_color", constants.siBool, import_props["is_vertex_color"])
+    param.Animatable = False
+
+    param = prop.AddParameter3("light_mode", constants.siInt2, import_props["light_mode"])
     param.Animatable = False
 
     # define layout
@@ -194,6 +201,10 @@ def USDImportOpen_Execute():
     layout.EndRow()
     layout.EndGroup()
 
+    layout.AddGroup("Lights")
+    layout.AddEnumControl("light_mode", ["Default", 0, "Sycles", 1] if utils.is_sycles_install(app) else ["Default", 0], "Light Sources")
+    layout.EndGroup()
+
     layout.AddGroup("Options")
     layout.AddItem("clear_scene", "Clear Scene")
     layout.AddItem("materials", "Assign Imported Materials")
@@ -217,6 +228,7 @@ def USDImportOpen_Execute():
         import_props["is_vertex_creases"] = prop.Parameters("is_vertex_creases").Value
         import_props["is_edge_creases"] = prop.Parameters("is_edge_creases").Value
         import_props["is_vertex_color"] = prop.Parameters("is_vertex_color").Value
+        import_props["light_mode"] = prop.Parameters("light_mode").Value
         with open(props_path, "w") as file:
             file.write(str(import_props))
 
@@ -257,7 +269,8 @@ def USDImportOpen_Execute():
                              attributes,
                              objects_types,
                              prop.Parameters("clear_scene").Value,
-                             prop.Parameters("materials").Value)
+                             prop.Parameters("materials").Value,
+                             prop.Parameters("light_mode").Value)
 
     # delete dialog
     app.DeleteObj(prop)

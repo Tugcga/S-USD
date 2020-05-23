@@ -76,6 +76,14 @@ def get_plugin_path(app, plugin_name):
     return None
 
 
+def is_sycles_install(app):
+    plugins = app.Plugins
+    for p in plugins:
+        if p.Name == "Cycles Renderer":
+            return True
+    return False
+
+
 def is_stands(pc_object):
     pc_geo = pc_object.GetActivePrimitive2().Geometry
     strands_position_attr = pc_geo.GetICEAttributeFromName("StrandPosition")
