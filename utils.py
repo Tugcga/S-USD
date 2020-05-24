@@ -57,6 +57,18 @@ def is_animated_mesh(usd_mesh, attributes):
                     if len(normals_times) > 1:
                         is_animated = True
                         return is_animated, is_topology_changed
+            all_primvars = usd_mesh.GetPrimvars()
+            for p in all_primvars:
+                if not is_animated:
+                    type_strings = p.GetTypeName().aliasesAsStrings
+                    interpolation = p.GetInterpolation()
+                    times = p.GetTimeSamples()
+                    if "texCoord2f[]" in type_strings:  # this uvs
+                        is_animated = len(times) > 1
+                    elif "color3f[]" in type_strings and interpolation == "faceVarying":  # this is colors
+                        is_animated = len(times) > 1
+                    elif interpolation == "vertex" and "float[]" in type_strings:  # this is weightmaps
+                        is_animated = len(times) > 1
 
     return is_animated, is_topology_changed
 
@@ -111,6 +123,16 @@ def is_float_arrays_are_different(array_a, array_b):
     else:
         for i in range(len(array_a)):
             if abs(array_a[i] - array_b[i]) > EPSILON:
+                return True
+        return False
+
+
+def is_vector2_arrays_are_different(array_a, array_b):
+    if len(array_a) != len(array_b):
+        return True
+    else:
+        for i in range(len(array_a)):
+            if abs(array_a[i][0] - array_b[i][0]) > EPSILON or abs(array_a[i][1] - array_b[i][1]) > EPSILON:
                 return True
         return False
 

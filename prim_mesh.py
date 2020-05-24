@@ -106,22 +106,6 @@ def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mes
                         else:
                             usd_vertex_color_attr.Set(xsi_colors, Usd.TimeCode(frame))
 
-    # uv maps
-    if "uvmap" in opt_attributes:
-        for xsi_cluster in xsi_sample_clusters:
-            if xsi_cluster.IsAlwaysComplete():
-                for prop in xsi_cluster.Properties:
-                    if prop.Type == "uvspace":
-                        xsi_uv_data = prop.Elements.Array  # [(u1, u2, u3, ...), (v1, v2, v3, ...), (w1, w2, w3, ...)], wi = 0
-                        xsi_uv = []
-                        for i in range(len(xsi_uv_data[0])):
-                            xsi_uv.append((xsi_uv_data[0][i], xsi_uv_data[1][i]))
-                        usd_uv_attr = usd_mesh_primvar.CreatePrimvar(prop.Name, Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
-                        if frame is None:
-                            usd_uv_attr.Set(xsi_uv)
-                        else:
-                            usd_uv_attr.Set(xsi_uv, Usd.TimeCode(frame))
-
     # weightmaps
     if "weightmap" in opt_attributes:
         xsi_vertex_clusters = xsi_polygonmesh.Clusters.Filter("pnt")
@@ -211,6 +195,58 @@ def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mes
                     UsdShade.MaterialBindingAPI(usd_subset).Bind(material_to_usd[mat_identifier])
 
 
+def set_uvs(app, mesh_object, usd_mesh_primvar, opt_attributes, force_frame, opt_anim):
+    # uv maps
+    if "uvmap" in opt_attributes:
+        if opt_anim is None:
+            xsi_start_polygonmesh = mesh_object.GetActivePrimitive3().Geometry
+        else:
+            if force_frame:
+                app.SetValue("PlayControl.Current", opt_anim[0], "")
+                app.SetValue("PlayControl.Key", opt_anim[0], "")
+            xsi_start_polygonmesh = mesh_object.GetActivePrimitive3(opt_anim[0]).GetGeometry3(opt_anim[0])  # at start frame
+        xsi_sample_clusters = xsi_start_polygonmesh.Clusters.Filter("sample")
+        uvs_data = {}  # key - uv name, value - [is_constant, [at frame 1], [at frame 2], ...] When we add new arrays, is_constant=True, until the array is differ from the first one
+        for xsi_cluster in xsi_sample_clusters:
+            if xsi_cluster.IsAlwaysComplete():
+                for prop in xsi_cluster.Properties:
+                    if prop.Type == "uvspace":
+                        xsi_uv_data = prop.Elements.Array
+                        uvs_data[prop.Name] = [True, [(xsi_uv_data[0][i], xsi_uv_data[1][i]) for i in range(len(xsi_uv_data[0]))]]  # init array by first values
+        if len(uvs_data) > 0:
+            # iterate through frames
+            if opt_anim is not None:
+                for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+                    if force_frame:
+                        app.SetValue("PlayControl.Current", frame, "")
+                        app.SetValue("PlayControl.Key", frame, "")
+                    frame_polymesh = mesh_object.GetActivePrimitive3(frame).GetGeometry3(frame)
+                    frame_clusters = frame_polymesh.Clusters.Filter("sample")
+                    for frame_cluster in frame_clusters:
+                        if frame_cluster.IsAlwaysComplete():
+                            for prop in frame_cluster.Properties:
+                                if prop.Type == "uvspace":
+                                    frame_uv_data = prop.Elements.Array
+                                    if prop.Name in uvs_data:
+                                        current_uv_data = uvs_data[prop.Name]
+                                        current_uv_data.append([(frame_uv_data[0][i], frame_uv_data[1][i]) for i in range(len(frame_uv_data[0]))])
+                                        # check is new array is differ from the first one
+                                        if current_uv_data[0]:
+                                            current_uv_data[0] = not utils.is_vector2_arrays_are_different(current_uv_data[1], current_uv_data[-1])
+            # next write uv attributes
+            for uv_name, uv_data in uvs_data.items():
+                if uv_data[0]:
+                    # constant, set only the first one
+                    usd_mesh_primvar.CreatePrimvar(uv_name, Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying).Set(uv_data[1])
+                else:
+                    # change in times
+                    usd_attr = usd_mesh_primvar.CreatePrimvar(uv_name, Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+                    step = 0
+                    for frame in range(opt_anim[0], opt_anim[1] + 1):
+                        usd_attr.Set(uv_data[step + 1], Usd.TimeCode(frame))
+                        step += 1
+
+
 def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, root_path, progress_bar=None):
     '''stage is a root stage
        mesh_object is a polygonmesh X3DObject
@@ -256,6 +292,8 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
             if progress_bar is not None:
                 progress_bar.Caption = utils.build_export_object_caption(mesh_object, frame)
             set_mesh_at_frame(app, ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=frame, force_frame=opt.get("force_change_frame", False))
+    # define uvs
+    set_uvs(app, mesh_object, usd_mesh_primvar, opt_attributes, opt.get("force_change_frame", False), opt_animation)
     ref_stage.Save()
 
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
@@ -491,6 +529,57 @@ def read_mesh_data(mesh_options, data_dict, file_path=None, mesh_path=None, usd_
             data_dict["cluster"] = read_clusters(usd_mesh)
 
 
+def setup_normals_cluster(app, normals_cls, is_mesh_empty, xsi_geometry):
+    # may be geometry already contains normal cluster, find it
+    if not is_mesh_empty:
+        find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster"
+        normals_cls = app.Dictionary.GetObject(find_path, False)
+    # if we did not find normal cluster, create the new one
+    if normals_cls is None:
+        normals_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "User_Normal_Cluster")
+    return normals_cls
+
+
+def setup_uvs_cluster(app, xsi_geometry):
+    find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates"
+    uvs_cls = app.Dictionary.GetObject(find_path, False)
+    if uvs_cls is None:
+        uvs_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "UVCoordinates")
+    return uvs_cls
+
+
+def setup_normals(app, normals, normals_cls, is_mesh_empty, xsi_geometry):
+    if normals is not None and len(normals) > 0:
+        normals_cls = setup_normals_cluster(app, normals_cls, is_mesh_empty, xsi_geometry)
+        normal_name = "User_Normal_Property"
+        # try to find normals property
+        normals_prop = None
+        if not is_mesh_empty:
+            find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster." + normal_name
+            normals_prop = app.Dictionary.GetObject(find_path, False)
+        if normals_prop is None:
+            new_normals_prop = app.AddProp("User Normal Property", normals_cls.FullName, constants.siDefaultPropagation, normal_name)
+            normals_prop = new_normals_prop[1][0]
+        xsi_normals = utils.transpose_vectors_array(normals)
+        normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
+
+
+def setup_uvs(app, xsi_geometry, uvs_data, is_dynamic, frame=None):
+    uvs_cls = setup_uvs_cluster(app, xsi_geometry)
+    for uv_data in uvs_data:
+        if (is_dynamic and len(uv_data[1]) > 1) or (not is_dynamic and len(uv_data[1]) == 1):
+            uv_name = uv_data[0]
+            uv_coordinates = utils.get_closest_data(uv_data[1], 0 if frame is None else frame)
+            find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates." + uv_name
+            uv_prop = app.Dictionary.GetObject(find_path, False)
+            if uv_prop is None:
+                new_uv_prop = app.AddProp("Texture Projection", uvs_cls.FullName, constants.siDefaultPropagation, uv_name)
+                uv_prop = new_uv_prop[1][0]
+            uv_array = utils.transpose_2vectors_array(uv_coordinates)
+            if len(uv_prop.Elements.Array[0]) > 0:  # sometimes  this array is not inicialidex and equal ((), (), ())
+                uv_prop.Elements.Array = tuple([tuple(uv_array[0]), tuple(uv_array[1]), tuple([0]*len(uv_array[0]))])
+
+
 def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=None):
     # mesh_options contains keys: attributes, is_topology_change
     # this method calls every frame from operator update (or at once, if the mesh is constructed without operator)
@@ -501,6 +590,13 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
     points = utils.get_closest_data(points_data, frame)
     xsi_points_postions = utils.transpose_vectors_array(points)  # convert to xsi-specific format
     is_mesh_empty = False
+
+    normals_cls = None
+    colors_cls = None
+    weight_cls = None
+
+    normals_data = utils.get_in_dict(mesh_data, "normals")
+    uvs_data = utils.get_in_dict(mesh_data, "uvs")
 
     if xsi_vertex_count == 0 or mesh_options["is_topology_change"] or xsi_vertex_count != len(points):
         # cerate all topology
@@ -516,6 +612,13 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         if "cluster" in attrs:
             for cluster_data in mesh_data["cluster"]:
                 xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+
+        if "normal" in attrs and normals_data is not None and len(normals_data) == 1:
+            normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
+            setup_normals(app, normals, normals_cls, True, xsi_geometry)
+
+        if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
+            setup_uvs(app, xsi_geometry, uvs_data, False)
 
         # creases import only at one frame, because at other frames it creates too many crese operator
         vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
@@ -575,55 +678,15 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         xsi_geometry.Vertices.PositionArray = xsi_points_postions
 
     # next setup all other attributes
-    normals_data = utils.get_in_dict(mesh_data, "normals")
-    if "normal" in attrs and normals_data is not None:
+    if "normal" in attrs and normals_data is not None and len(normals_data) > 1:
         normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
-        if normals is not None and len(normals) > 0:
-            normals_cls = None
-            # may be geometry already contains normal cluster, find it
-            if not is_mesh_empty:
-                find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster"
-                normals_cls = app.Dictionary.GetObject(find_path, False)
-            # if we did not find normal cluster, create the new one
-            if normals_cls is None:
-                normals_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "User_Normal_Cluster")
-            normal_name = "User_Normal_Property"
-            # try to find normals property
-            normals_prop = None
-            if not is_mesh_empty:
-                find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster." + normal_name
-                normals_prop = app.Dictionary.GetObject(find_path, False)
-            if normals_prop is None:
-                new_normals_prop = app.AddProp("User Normal Property", normals_cls.FullName, constants.siDefaultPropagation, normal_name)
-                normals_prop = new_normals_prop[1][0]
-            xsi_normals = utils.transpose_vectors_array(normals)
-            normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
+        setup_normals(app, normals, normals_cls, is_mesh_empty, xsi_geometry)
 
-    uvs_data = utils.get_in_dict(mesh_data, "uvs")
-    if "uvmap" in attrs and uvs_data is not None:
-        uvs_cls = None
-        if not is_mesh_empty:
-            find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates"
-            uvs_cls = app.Dictionary.GetObject(find_path, False)
-        for uv_data in uvs_data:
-            # get uvs in frame
-            uv_name = uv_data[0]
-            uv_coordinates = utils.get_closest_data(uv_data[1], 0 if frame is None else frame)
-            if uvs_cls is None:
-                uvs_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "UVCoordinates")
-            uv_prop = None
-            if not is_mesh_empty:
-                find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates." + uv_name
-                uv_prop = app.Dictionary.GetObject(find_path, False)
-            if uv_prop is None:
-                new_uv_prop = app.AddProp("Texture Projection", uvs_cls.FullName, constants.siDefaultPropagation, uv_name)
-                uv_prop = new_uv_prop[1][0]
-            uv_array = utils.transpose_2vectors_array(uv_coordinates)
-            uv_prop.Elements.Array = tuple([tuple(uv_array[0]), tuple(uv_array[1]), tuple([0]*len(uv_array[0]))])
+    if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
+        setup_uvs(app, xsi_geometry, uvs_data, True, frame=frame)
 
     colors_data = utils.get_in_dict(mesh_data, "colors")
-    if "color" in attrs and colors_data is not None:
-        colors_cls = None
+    if "color" in attrs and colors_data is not None and len(colors_data) > 0:  # do it only if at least one vertex colors are exists
         if not is_mesh_empty:
             find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors"
             colors_cls = app.Dictionary.GetObject(find_path, False)
@@ -643,8 +706,7 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
             colors_prop.Elements.Array = tuple([tuple(colors_array[0]), tuple(colors_array[1]), tuple(colors_array[2])])
 
     weightmaps_data = utils.get_in_dict(mesh_data, "weightmaps")
-    if "weightmap" in attrs and weightmaps_data is not None:
-        weight_cls = None
+    if "weightmap" in attrs and weightmaps_data is not None and len(weightmaps_data) > 0:
         if not is_mesh_empty:
             find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls"
             weight_cls = app.Dictionary.GetObject(find_path, False)
@@ -672,7 +734,7 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
     xsi_geometry = xsi_mesh.ActivePrimitive.Geometry
 
     mesh_attributes = options.get("attributes", [])
-    is_animated, is_topology_changed = utils.is_animated_mesh(usd_mesh, mesh_attributes)
+    is_animated, is_topology_changed = utils.is_animated_mesh(usd_mesh, mesh_attributes)  # is_animated true if at least one of attributes has time changes
     mesh_options = {"attributes": mesh_attributes}
     if not is_animated:
         # simply apply geometry
