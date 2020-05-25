@@ -90,24 +90,8 @@ def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mes
             usd_normals_attr.Set(xsi_normals, Usd.TimeCode(frame))
         usd_mesh.SetNormalsInterpolation(UsdGeom.Tokens.faceVarying)
 
-    # vertex color
-    if "color" in opt_attributes:
-        for xsi_cluster in xsi_sample_clusters:
-            if xsi_cluster.IsAlwaysComplete():
-                for prop in xsi_cluster.Properties:
-                    if prop.Type == "vertexcolor":
-                        xsi_color_data = prop.Elements.Array  # [(r1, r2, r3, ...), (g1, g2, g3, ...), (b1, b2, b3, ...), (a1, a2, a3, ...)]
-                        xsi_colors = []
-                        for i in range(len(xsi_color_data[0])):
-                            xsi_colors.append((xsi_color_data[0][i], xsi_color_data[1][i], xsi_color_data[2][i]))
-                        usd_vertex_color_attr = usd_mesh_primvar.CreatePrimvar(prop.Name, Sdf.ValueTypeNames.Color3fArray, UsdGeom.Tokens.faceVarying)
-                        if frame is None:
-                            usd_vertex_color_attr.Set(xsi_colors)
-                        else:
-                            usd_vertex_color_attr.Set(xsi_colors, Usd.TimeCode(frame))
-
     # weightmaps
-    if "weightmap" in opt_attributes:
+    '''if "weightmap" in opt_attributes:
         xsi_vertex_clusters = xsi_polygonmesh.Clusters.Filter("pnt")
         for pnt_cluster in xsi_vertex_clusters:
             if pnt_cluster.IsAlwaysComplete():
@@ -128,7 +112,7 @@ def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mes
                         if frame is None:
                             usd_weight_attr.Set(xsi_weights)
                         else:
-                            usd_weight_attr.Set(xsi_weights, Usd.TimeCode(frame))
+                            usd_weight_attr.Set(xsi_weights, Usd.TimeCode(frame))'''
 
     # vertex creases
     if "vertex_creases" in opt_attributes:
@@ -195,56 +179,114 @@ def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mes
                     UsdShade.MaterialBindingAPI(usd_subset).Bind(material_to_usd[mat_identifier])
 
 
-def set_uvs(app, mesh_object, usd_mesh_primvar, opt_attributes, force_frame, opt_anim):
-    # uv maps
-    if "uvmap" in opt_attributes:
-        if opt_anim is None:
-            xsi_start_polygonmesh = mesh_object.GetActivePrimitive3().Geometry
-        else:
-            if force_frame:
-                app.SetValue("PlayControl.Current", opt_anim[0], "")
-                app.SetValue("PlayControl.Key", opt_anim[0], "")
-            xsi_start_polygonmesh = mesh_object.GetActivePrimitive3(opt_anim[0]).GetGeometry3(opt_anim[0])  # at start frame
-        xsi_sample_clusters = xsi_start_polygonmesh.Clusters.Filter("sample")
-        uvs_data = {}  # key - uv name, value - [is_constant, [at frame 1], [at frame 2], ...] When we add new arrays, is_constant=True, until the array is differ from the first one
-        for xsi_cluster in xsi_sample_clusters:
-            if xsi_cluster.IsAlwaysComplete():
-                for prop in xsi_cluster.Properties:
-                    if prop.Type == "uvspace":
-                        xsi_uv_data = prop.Elements.Array
-                        uvs_data[prop.Name] = [True, [(xsi_uv_data[0][i], xsi_uv_data[1][i]) for i in range(len(xsi_uv_data[0]))]]  # init array by first values
-        if len(uvs_data) > 0:
-            # iterate through frames
-            if opt_anim is not None:
-                for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
-                    if force_frame:
-                        app.SetValue("PlayControl.Current", frame, "")
-                        app.SetValue("PlayControl.Key", frame, "")
-                    frame_polymesh = mesh_object.GetActivePrimitive3(frame).GetGeometry3(frame)
-                    frame_clusters = frame_polymesh.Clusters.Filter("sample")
-                    for frame_cluster in frame_clusters:
-                        if frame_cluster.IsAlwaysComplete():
-                            for prop in frame_cluster.Properties:
-                                if prop.Type == "uvspace":
-                                    frame_uv_data = prop.Elements.Array
-                                    if prop.Name in uvs_data:
-                                        current_uv_data = uvs_data[prop.Name]
-                                        current_uv_data.append([(frame_uv_data[0][i], frame_uv_data[1][i]) for i in range(len(frame_uv_data[0]))])
+def export_set_sample_attribute(app, mesh_object, prop_type, dimension, usd_mesh_primvar, force_frame, opt_anim, cluster_filter):
+    if opt_anim is None:
+        xsi_start_polygonmesh = mesh_object.GetActivePrimitive3().Geometry
+    else:
+        if force_frame:
+            app.SetValue("PlayControl.Current", opt_anim[0], "")
+            app.SetValue("PlayControl.Key", opt_anim[0], "")
+        xsi_start_polygonmesh = mesh_object.GetActivePrimitive3(opt_anim[0]).GetGeometry3(opt_anim[0])  # at start frame
+    xsi_clusters = xsi_start_polygonmesh.Clusters.Filter(cluster_filter)
+    xsi_attr_data = {}  # key - name, value - [is_constant, [at frame 1], [at frame 2], ...] When we add new arrays, is_constant=True, until the array is differ from the first one
+    usd_attributes = {}  # key - name, value - link to usd attribute
+    for xsi_cluster in xsi_clusters:
+        index_to_vertex = None
+        if xsi_cluster.IsAlwaysComplete():
+            if cluster_filter == "pnt":  # for point cluster save map from index to vertex
+                index_to_vertex = xsi_cluster.Elements.Array
+            for prop in xsi_cluster.Properties:
+                if prop.Type == prop_type:
+                    if index_to_vertex is None:
+                        xsi_data_array = prop.Elements.Array
+                        xsi_attr_data[prop.Name] = [True, [tuple(xsi_data_array[j][i] for j in range(dimension)) for i in range(len(xsi_data_array[0]))]]  # init array by first values
+                    else:
+                        xsi_cluster_data = []
+                        c_elements = prop.Elements
+                        c_count = len(c_elements)
+                        for c_e in range(c_count):
+                            xsi_cluster_data.append((index_to_vertex[c_e], c_elements[c_e][0]))
+                        xsi_cluster_data = sorted(xsi_cluster_data, key=lambda x: x[0])
+                        xsi_weights = []
+                        for c in xsi_cluster_data:
+                            xsi_weights.append(c[1])
+                        xsi_attr_data[prop.Name] = [True, xsi_weights]
+                    # create usd attribute, different attribute for differetn types
+                    if prop_type == "uvspace":
+                        usd_attributes[prop.Name] = usd_mesh_primvar.CreatePrimvar(prop.Name, Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+                    elif prop_type == "vertexcolor":
+                        usd_attributes[prop.Name] = usd_mesh_primvar.CreatePrimvar(prop.Name, Sdf.ValueTypeNames.Color3fArray, UsdGeom.Tokens.faceVarying)
+                    elif prop_type == "wtmap":
+                        usd_attributes[prop.Name] = usd_mesh_primvar.CreatePrimvar(prop.Name, Sdf.ValueTypeNames.FloatArray, UsdGeom.Tokens.vertex)
+    if len(xsi_attr_data) > 0:
+        # iterate through frames
+        if opt_anim is not None:
+            for frame in range(opt_anim[0] + 1, opt_anim[1] + 1):
+                if force_frame:
+                    app.SetValue("PlayControl.Current", frame, "")
+                    app.SetValue("PlayControl.Key", frame, "")
+                frame_polymesh = mesh_object.GetActivePrimitive3(frame).GetGeometry3(frame)
+                frame_clusters = frame_polymesh.Clusters.Filter(cluster_filter)
+                for frame_cluster in frame_clusters:
+                    index_to_vertex = None
+                    if frame_cluster.IsAlwaysComplete():
+                        if cluster_filter == "pnt":
+                            index_to_vertex = xsi_cluster.Elements.Array
+                        for prop in frame_cluster.Properties:
+                            if prop.Type == prop_type:
+                                if index_to_vertex is None:
+                                    frame_attr_data = prop.Elements.Array
+                                    if prop.Name in xsi_attr_data:
+                                        current_xsi_data = xsi_attr_data[prop.Name]
+                                        current_xsi_data.append([tuple(frame_attr_data[j][i] for j in range(dimension)) for i in range(len(frame_attr_data[0]))])
                                         # check is new array is differ from the first one
-                                        if current_uv_data[0]:
-                                            current_uv_data[0] = not utils.is_vector2_arrays_are_different(current_uv_data[1], current_uv_data[-1])
-            # next write uv attributes
-            for uv_name, uv_data in uvs_data.items():
-                if uv_data[0]:
-                    # constant, set only the first one
-                    usd_mesh_primvar.CreatePrimvar(uv_name, Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying).Set(uv_data[1])
-                else:
-                    # change in times
-                    usd_attr = usd_mesh_primvar.CreatePrimvar(uv_name, Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
-                    step = 0
-                    for frame in range(opt_anim[0], opt_anim[1] + 1):
-                        usd_attr.Set(uv_data[step + 1], Usd.TimeCode(frame))
-                        step += 1
+                                        if current_xsi_data[0]:
+                                            current_xsi_data[0] = not utils.is_vector2_arrays_are_different(current_xsi_data[1], current_xsi_data[-1])
+                                else:
+                                    # read per-vertex data
+                                    xsi_cluster_data = []
+                                    c_elements = prop.Elements
+                                    c_count = len(c_elements)
+                                    for c_e in range(c_count):
+                                        xsi_cluster_data.append((index_to_vertex[c_e], c_elements[c_e][0]))
+                                    xsi_cluster_data = sorted(xsi_cluster_data, key=lambda x: x[0])
+                                    xsi_weights = []
+                                    for c in xsi_cluster_data:
+                                        xsi_weights.append(c[1])
+                                    # add it
+                                    if prop.Name in xsi_attr_data:
+                                        current_xsi_data = xsi_attr_data[prop.Name]
+                                        current_xsi_data.append(xsi_weights)
+                                        # check is new array is differ from the first one
+                                        if current_xsi_data[0]:
+                                            current_xsi_data[0] = not utils.is_float_arrays_are_different(current_xsi_data[1], current_xsi_data[-1])
+
+        # next write attributes
+        for xsi_name, xsi_data in xsi_attr_data.items():
+            if xsi_data[0]:
+                # constant, set only the first one
+                usd_attributes[xsi_name].Set(xsi_data[1])
+            else:
+                # change in times
+                step = 0
+                for frame in range(opt_anim[0], opt_anim[1] + 1):
+                    usd_attributes[xsi_name].Set(xsi_data[step + 1], Usd.TimeCode(frame))
+                    step += 1
+
+
+def export_set_colors(app, mesh_object, usd_mesh_primvar, opt_attributes, force_frame, opt_anim):
+    if "color" in opt_attributes:
+        export_set_sample_attribute(app, mesh_object, "vertexcolor", 3, usd_mesh_primvar, force_frame, opt_anim, "sample")
+
+
+def export_set_uvs(app, mesh_object, usd_mesh_primvar, opt_attributes, force_frame, opt_anim):
+    if "uvmap" in opt_attributes:
+        export_set_sample_attribute(app, mesh_object, "uvspace", 2, usd_mesh_primvar, force_frame, opt_anim, "sample")
+
+
+def export_set_weightmaps(app, mesh_object, usd_mesh_primvar, opt_attributes, force_frame, opt_anim):
+    if "weightmap" in opt_attributes:
+        export_set_sample_attribute(app, mesh_object, "wtmap", 1, usd_mesh_primvar, force_frame, opt_anim, "pnt")
 
 
 def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, root_path, progress_bar=None):
@@ -292,8 +334,10 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
             if progress_bar is not None:
                 progress_bar.Caption = utils.build_export_object_caption(mesh_object, frame)
             set_mesh_at_frame(app, ref_stage, mesh_object, opt_attributes, usd_mesh, usd_mesh_prim, usd_mesh_primvar, is_constant, material_to_usd, frame=frame, force_frame=opt.get("force_change_frame", False))
-    # define uvs
-    set_uvs(app, mesh_object, usd_mesh_primvar, opt_attributes, opt.get("force_change_frame", False), opt_animation)
+    # define attributes
+    export_set_uvs(app, mesh_object, usd_mesh_primvar, opt_attributes, opt.get("force_change_frame", False), opt_animation)
+    export_set_colors(app, mesh_object, usd_mesh_primvar, opt_attributes, opt.get("force_change_frame", False), opt_animation)
+    export_set_weightmaps(app, mesh_object, usd_mesh_primvar, opt_attributes, opt.get("force_change_frame", False), opt_animation)
     ref_stage.Save()
 
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
@@ -529,11 +573,10 @@ def read_mesh_data(mesh_options, data_dict, file_path=None, mesh_path=None, usd_
             data_dict["cluster"] = read_clusters(usd_mesh)
 
 
-def setup_normals_cluster(app, normals_cls, is_mesh_empty, xsi_geometry):
+def setup_normals_cluster(app, xsi_geometry):
     # may be geometry already contains normal cluster, find it
-    if not is_mesh_empty:
-        find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster"
-        normals_cls = app.Dictionary.GetObject(find_path, False)
+    find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster"
+    normals_cls = app.Dictionary.GetObject(find_path, False)
     # if we did not find normal cluster, create the new one
     if normals_cls is None:
         normals_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "User_Normal_Cluster")
@@ -548,23 +591,39 @@ def setup_uvs_cluster(app, xsi_geometry):
     return uvs_cls
 
 
-def setup_normals(app, normals, normals_cls, is_mesh_empty, xsi_geometry):
+def setup_colors_cluster(app, xsi_geometry):
+    find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors"
+    color_cls = app.Dictionary.GetObject(find_path, False)
+    if color_cls is None:
+        color_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "VertexColors")
+    return color_cls
+
+
+def setup_weights_cluster(app, xsi_geometry):
+    find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls"
+    weight_cls = app.Dictionary.GetObject(find_path, False)
+    if weight_cls is None:
+        weight_cls = xsi_geometry.AddCluster(constants.siVertexCluster, "WeightMapCls")
+    return weight_cls
+
+
+def import_setup_normals(app, normals, xsi_geometry):
     if normals is not None and len(normals) > 0:
-        normals_cls = setup_normals_cluster(app, normals_cls, is_mesh_empty, xsi_geometry)
+        normals_cls = setup_normals_cluster(app, xsi_geometry)
         normal_name = "User_Normal_Property"
         # try to find normals property
-        normals_prop = None
-        if not is_mesh_empty:
-            find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster." + normal_name
-            normals_prop = app.Dictionary.GetObject(find_path, False)
+        find_path = xsi_geometry.Parent.FullName + ".cls." + "User_Normal_Cluster." + normal_name
+        normals_prop = app.Dictionary.GetObject(find_path, False)
         if normals_prop is None:
             new_normals_prop = app.AddProp("User Normal Property", normals_cls.FullName, constants.siDefaultPropagation, normal_name)
             normals_prop = new_normals_prop[1][0]
         xsi_normals = utils.transpose_vectors_array(normals)
-        normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
+        # print(normals_cls.IsAlwaysComplete(), len(normals_prop.Elements.Array[0]), normals_prop.Elements.Count, len(xsi_normals[0]))
+        if normals_prop.Elements.Count == len(xsi_normals[0]):
+            normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
 
 
-def setup_uvs(app, xsi_geometry, uvs_data, is_dynamic, frame=None):
+def import_setup_uvs(app, xsi_geometry, uvs_data, is_dynamic, is_topology_change, frame=None):
     uvs_cls = setup_uvs_cluster(app, xsi_geometry)
     for uv_data in uvs_data:
         if (is_dynamic and len(uv_data[1]) > 1) or (not is_dynamic and len(uv_data[1]) == 1):
@@ -580,6 +639,37 @@ def setup_uvs(app, xsi_geometry, uvs_data, is_dynamic, frame=None):
                 uv_prop.Elements.Array = tuple([tuple(uv_array[0]), tuple(uv_array[1]), tuple([0]*len(uv_array[0]))])
 
 
+def import_set_colors(app, xsi_geometry, colors_data, is_dynamic, is_topology_change, frame=None):
+    colors_cls = setup_colors_cluster(app, xsi_geometry)
+    for color_data in colors_data:
+        if (is_dynamic and len(color_data[1]) > 1) or (not is_dynamic and len(color_data[1]) == 1):
+            color_name = color_data[0]
+            colors = utils.get_closest_data(color_data[1], 0 if frame is None else frame)
+            find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors." + color_name
+            color_prop = app.Dictionary.GetObject(find_path, False)
+            if color_prop is None:
+                new_colors_prop = app.AddProp("Vertex Color", colors_cls.FullName, constants.siDefaultPropagation, color_name)
+                color_prop = new_colors_prop[1][0]
+            colors_array = utils.transpose_vectors_array(colors)
+            if len(color_prop.Elements.Array[0]) > 0:
+                color_prop.Elements.Array = tuple([tuple(colors_array[0]), tuple(colors_array[1]), tuple(colors_array[2])])
+
+
+def import_set_weightmaps(app, xsi_geometry, weights_data, is_dynamic, is_topology_change, frame=None):
+    weight_cls = setup_weights_cluster(app, xsi_geometry)
+    for weight_data in weights_data:
+        if (is_dynamic and len(weight_data[1]) > 1) or (not is_dynamic and len(weight_data[1]) == 1):
+            weight_name = weight_data[0]
+            weights = utils.get_closest_data(weight_data[1], 0 if frame is None else frame)
+            find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls." + weight_name
+            w_prop = app.Dictionary.GetObject(find_path, False)
+            if w_prop is None:
+                new_w_prop = app.CreateWeightMap("", weight_cls.FullName, weight_name, "", False)
+                w_prop = new_w_prop[0]
+            if len(w_prop.Elements.Array) == len(weights):
+                w_prop.Elements.Array = [w for w in weights]
+
+
 def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=None):
     # mesh_options contains keys: attributes, is_topology_change
     # this method calls every frame from operator update (or at once, if the mesh is constructed without operator)
@@ -589,14 +679,13 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
     points_data = mesh_data["points"]
     points = utils.get_closest_data(points_data, frame)
     xsi_points_postions = utils.transpose_vectors_array(points)  # convert to xsi-specific format
-    is_mesh_empty = False
 
-    normals_cls = None
-    colors_cls = None
-    weight_cls = None
+    is_topology_change = mesh_options["is_topology_change"]
 
     normals_data = utils.get_in_dict(mesh_data, "normals")
     uvs_data = utils.get_in_dict(mesh_data, "uvs")
+    colors_data = utils.get_in_dict(mesh_data, "colors")
+    weightmaps_data = utils.get_in_dict(mesh_data, "weightmaps")
 
     if xsi_vertex_count == 0 or mesh_options["is_topology_change"] or xsi_vertex_count != len(points):
         # cerate all topology
@@ -608,121 +697,96 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
 
         xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size))
 
-        # setup clusters only at once, when we create the topology
-        if "cluster" in attrs:
-            for cluster_data in mesh_data["cluster"]:
-                xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+        # sset attributes only for non-changed topology
+        if not is_topology_change:
+            # setup clusters only at once, when we create the topology
+            if "cluster" in attrs:
+                for cluster_data in mesh_data["cluster"]:
+                    xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
 
-        if "normal" in attrs and normals_data is not None and len(normals_data) == 1:
-            normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
-            setup_normals(app, normals, normals_cls, True, xsi_geometry)
+            if "normal" in attrs and normals_data is not None and len(normals_data) == 1:
+                normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
+                import_setup_normals(app, normals, xsi_geometry, is_topology_change)
 
-        if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
-            setup_uvs(app, xsi_geometry, uvs_data, False)
+            if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
+                import_setup_uvs(app, xsi_geometry, uvs_data, False, is_topology_change)
 
-        # creases import only at one frame, because at other frames it creates too many crese operator
-        vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
-        if "vertex_creases" in attrs and vertex_creases_data is not None and len(vertex_creases_data) > 0:
-            vertex_creases = utils.get_closest_data(vertex_creases_data, 0 if frame is None else frame)  # array of the pairs (index, value)
-            vertices = xsi_geometry.Vertices
-            name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".pnt"
-            creases_dict = {}
-            for vert in vertices:
-                data_index = utils.get_index_in_array_for_value(vertex_creases, vert.Index)
-                if data_index is not None:
-                    crease_value = vertex_creases[data_index][1]
-                    is_find = False
-                    for crease_key in creases_dict.keys():
-                        if abs(crease_key - crease_value) < 0.01:
-                            is_find = True
-                            creases_dict[crease_key].append(vert.Index)
-                    if not is_find:
-                        creases_dict[crease_value] = [vert.Index]
-            for crease_key in creases_dict.keys():
-                a = creases_dict[crease_key]
-                if len(a) > 0:
-                    op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(a), 3, constants.siPersistentOperation)
-                    op[0].Parameters("CreaseValue").Value = crease_key
+            if "color" in attrs and colors_data is not None and len(colors_data) > 0:
+                import_set_colors(app, xsi_geometry, colors_data, False, is_topology_change)
 
-        edge_creases_data = utils.get_in_dict(mesh_data, "edge_creases")
-        if "edge_creases" in attrs and edge_creases_data is not None and len(edge_creases_data) > 0:
-            edges_creases = utils.get_closest_data(edge_creases_data, 0 if frame is None else frame)  # array of triplets [(s, e, value), ...]
-            mesh_edges = xsi_geometry.Edges
-            name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".edge"
-            # set crease value to each edge separatly
-            creases_dict = {}  # store edge indexes for different values (epsilon = 0.001)
-            for edge in mesh_edges:
-                edge_verts = edge.Vertices
-                v0 = edge_verts[0].Index
-                v1 = edge_verts[1].Index
-                data_index = utils.get_index_in_array_for_pair(edges_creases, v0, v1)
-                if data_index is not None:
-                    crease_value = edges_creases[data_index][2]
-                    # find in the dict
-                    is_find = False
-                    for crease_key in creases_dict.keys():
-                        if abs(crease_key - crease_value) < 0.01:
-                            is_find = True
-                            creases_dict[crease_key].append(edge.Index)
-                    if not is_find:
-                        creases_dict[crease_value] = [edge.Index]
-            # apply crease operator for each array in the dict
-            for crease_key in creases_dict.keys():
-                a = creases_dict[crease_key]
-                if len(a) > 0:
-                    op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(creases_dict[crease_key]), 3, constants.siPersistentOperation)
-                    op[0].Parameters("CreaseValue").Value = crease_key
-        is_mesh_empty = True
+            if "weightmap" in attrs and weightmaps_data is not None and len(weightmaps_data) > 0:
+                import_set_weightmaps(app, xsi_geometry, weightmaps_data, False, is_topology_change)
+
+            # creases import only at one frame, because at other frames it creates too many crese operator
+            vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
+            if "vertex_creases" in attrs and vertex_creases_data is not None and len(vertex_creases_data) > 0:
+                vertex_creases = utils.get_closest_data(vertex_creases_data, 0 if frame is None else frame)  # array of the pairs (index, value)
+                vertices = xsi_geometry.Vertices
+                name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".pnt"
+                creases_dict = {}
+                for vert in vertices:
+                    data_index = utils.get_index_in_array_for_value(vertex_creases, vert.Index)
+                    if data_index is not None:
+                        crease_value = vertex_creases[data_index][1]
+                        is_find = False
+                        for crease_key in creases_dict.keys():
+                            if abs(crease_key - crease_value) < 0.01:
+                                is_find = True
+                                creases_dict[crease_key].append(vert.Index)
+                        if not is_find:
+                            creases_dict[crease_value] = [vert.Index]
+                for crease_key in creases_dict.keys():
+                    a = creases_dict[crease_key]
+                    if len(a) > 0:
+                        op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(a), 3, constants.siPersistentOperation)
+                        op[0].Parameters("CreaseValue").Value = crease_key
+
+            edge_creases_data = utils.get_in_dict(mesh_data, "edge_creases")
+            if "edge_creases" in attrs and edge_creases_data is not None and len(edge_creases_data) > 0:
+                edges_creases = utils.get_closest_data(edge_creases_data, 0 if frame is None else frame)  # array of triplets [(s, e, value), ...]
+                mesh_edges = xsi_geometry.Edges
+                name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".edge"
+                # set crease value to each edge separatly
+                creases_dict = {}  # store edge indexes for different values (epsilon = 0.001)
+                for edge in mesh_edges:
+                    edge_verts = edge.Vertices
+                    v0 = edge_verts[0].Index
+                    v1 = edge_verts[1].Index
+                    data_index = utils.get_index_in_array_for_pair(edges_creases, v0, v1)
+                    if data_index is not None:
+                        crease_value = edges_creases[data_index][2]
+                        # find in the dict
+                        is_find = False
+                        for crease_key in creases_dict.keys():
+                            if abs(crease_key - crease_value) < 0.01:
+                                is_find = True
+                                creases_dict[crease_key].append(edge.Index)
+                        if not is_find:
+                            creases_dict[crease_value] = [edge.Index]
+                # apply crease operator for each array in the dict
+                for crease_key in creases_dict.keys():
+                    a = creases_dict[crease_key]
+                    if len(a) > 0:
+                        op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(creases_dict[crease_key]), 3, constants.siPersistentOperation)
+                        op[0].Parameters("CreaseValue").Value = crease_key
     else:
         # set only point positions
         xsi_geometry.Vertices.PositionArray = xsi_points_postions
 
-    # next setup all other attributes
-    if "normal" in attrs and normals_data is not None and len(normals_data) > 1:
-        normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
-        setup_normals(app, normals, normals_cls, is_mesh_empty, xsi_geometry)
+    if not is_topology_change:
+        # next setup all other dynamic attributes
+        if "normal" in attrs and normals_data is not None and len(normals_data) > 1:
+            normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
+            import_setup_normals(app, normals, xsi_geometry, is_topology_change)
 
-    if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
-        setup_uvs(app, xsi_geometry, uvs_data, True, frame=frame)
+        if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
+            import_setup_uvs(app, xsi_geometry, uvs_data, True, is_topology_change, frame=frame)
 
-    colors_data = utils.get_in_dict(mesh_data, "colors")
-    if "color" in attrs and colors_data is not None and len(colors_data) > 0:  # do it only if at least one vertex colors are exists
-        if not is_mesh_empty:
-            find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors"
-            colors_cls = app.Dictionary.GetObject(find_path, False)
-        if colors_cls is None:
-            colors_cls = xsi_geometry.AddCluster(constants.siSampledPointCluster, "VertexColors")
-        for color_data in colors_data:
-            color_name = color_data[0]
-            colors = utils.get_closest_data(color_data[1], 0 if frame is None else frame)
-            colors_prop = None
-            if not is_mesh_empty:
-                find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors." + color_name
-                colors_prop = app.Dictionary.GetObject(find_path, False)
-            if colors_prop is None:
-                new_colors_prop = app.AddProp("Vertex Color", colors_cls.FullName, constants.siDefaultPropagation, color_name)
-                colors_prop = new_colors_prop[1][0]
-            colors_array = utils.transpose_vectors_array(colors)
-            colors_prop.Elements.Array = tuple([tuple(colors_array[0]), tuple(colors_array[1]), tuple(colors_array[2])])
+        if "color" in attrs and colors_data is not None and len(colors_data) > 0:  # do it only if at least one vertex colors are exists
+            import_set_colors(app, xsi_geometry, colors_data, True, is_topology_change, frame=frame)
 
-    weightmaps_data = utils.get_in_dict(mesh_data, "weightmaps")
-    if "weightmap" in attrs and weightmaps_data is not None and len(weightmaps_data) > 0:
-        if not is_mesh_empty:
-            find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls"
-            weight_cls = app.Dictionary.GetObject(find_path, False)
-        if weight_cls is None:
-            weight_cls = xsi_geometry.AddCluster(constants.siVertexCluster, "WeightMapCls")
-        for weight_data in weightmaps_data:
-            weight_name = weight_data[0]
-            weights = utils.get_closest_data(weight_data[1], 0 if frame is None else frame)
-            w_prop = None
-            if not is_mesh_empty:
-                find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls." + weight_name
-                w_prop = app.Dictionary.GetObject(find_path, False)
-            if w_prop is None:
-                new_w_prop = app.CreateWeightMap("", weight_cls.FullName, weight_name, "", False)
-                w_prop = new_w_prop[0]
-            w_prop.Elements.Array = [w for w in weights]
+        if "weightmap" in attrs and weightmaps_data is not None and len(weightmaps_data) > 0:
+            import_set_weightmaps(app, xsi_geometry, weightmaps_data, True, is_topology_change, frame=frame)
 
 
 def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent):

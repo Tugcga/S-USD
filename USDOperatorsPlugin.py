@@ -140,11 +140,12 @@ def USDMeshOperator_Update(in_ctxt):
         xsi_geometry = in_ctxt.OutputTarget.Geometry
         frame = utils.get_current_frame(app) + frame_offset
         data_dict = in_ctxt.UserData
-        if data_dict["is_init"] is False:
-            prim_mesh.read_mesh_data(mesh_options, data_dict, file_path=file_path, mesh_path=mesh_path)
-            data_dict["is_init"] = True
+        if data_dict is not None:
+            if data_dict["is_init"] is False:
+                prim_mesh.read_mesh_data(mesh_options, data_dict, file_path=file_path, mesh_path=mesh_path)
+                data_dict["is_init"] = True
 
-        prim_mesh.set_geometry_from_data(app, xsi_geometry, mesh_options, data_dict, frame)
+            prim_mesh.set_geometry_from_data(app, xsi_geometry, mesh_options, data_dict, frame)
 
     return True
 

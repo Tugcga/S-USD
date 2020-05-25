@@ -154,6 +154,8 @@ def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
                     new_object = emit_item(app, options, childrens["Points"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "BasisCurves" and "strands" in options["object_types"]:
                     new_object = emit_item(app, options, childrens["BasisCurves"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                elif ess_comp_names[0] == "Camera" and constants.siCameraPrimType in options["object_types"]:
+                    pass
                 elif ess_comp_names[0] == "SphereLight" and constants.siLightPrimType in options["object_types"]:
                     new_object = emit_item(app, options, childrens["SphereLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "DistantLight" and constants.siLightPrimType in options["object_types"]:

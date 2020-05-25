@@ -91,13 +91,13 @@ def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # he
         xsi_is_specular = xsi_light.Parameters("SpecularContribution")
         usd_diffuse_attr = usd_light.CreateDiffuseAttr()
         usd_specular_attr = usd_light.CreateSpecularAttr()
-        if opt_animation is None or utils.is_param_animated(xsi_is_diffuse, opt_animation):
+        if opt_animation is not None and utils.is_param_animated(xsi_is_diffuse, opt_animation):
             for frame in range(opt_animation[0], opt_animation[1] + 1):
                 usd_diffuse_attr.Set(xsi_is_diffuse.GetValue(frame), Usd.TimeCode(frame))
         else:
             usd_diffuse_attr.Set(1.0 if xsi_is_diffuse.Value else 0.0)
 
-        if opt_animation is None or utils.is_param_animated(xsi_is_specular, opt_animation):
+        if opt_animation is not None and utils.is_param_animated(xsi_is_specular, opt_animation):
             for frame in range(opt_animation[0], opt_animation[1] + 1):
                 usd_specular_attr.Set(xsi_is_specular.GetValue(frame), Usd.TimeCode(frame))
         else:
