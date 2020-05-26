@@ -1,5 +1,5 @@
 from win32com.client import constants
-from pxr import Usd
+from pxr import Usd, UsdGeom
 import utils
 import prim_xform
 import prim_hair
@@ -10,7 +10,7 @@ import prim_camera
 import imp
 
 
-def import_usd(app, file_path, options):
+def import_usd(app, file_path, options, xsi_toolkit):
     imp.reload(utils)
     imp.reload(prim_xform)
     imp.reload(prim_mesh)
@@ -18,6 +18,12 @@ def import_usd(app, file_path, options):
     imp.reload(prim_hair)
     imp.reload(prim_light)
     imp.reload(prim_camera)
+
+    progress_bar = xsi_toolkit.ProgressBar
+    progress_bar.Caption = ""
+    progress_bar.CancelEnabled = False
+    progress_bar.Visible = True
+
     is_clear = options.get("clear_scene", False)
     options["instances"] = {}  # key - path of the imported master object, value - link to the corresponding xsi-object
     options["file_path"] = file_path
@@ -26,21 +32,28 @@ def import_usd(app, file_path, options):
     options["import_camera"] = False
     cameras_to_remove = []
     if is_clear:
+        progress_bar.Caption = "Clear the scene"
         scene_root = app.ActiveProject2.ActiveScene.Root
         for child in scene_root.Children:
             if utils.is_contains_camera(child):
                 cameras_to_remove.append(child)
             else:
+                progress_bar.Caption = "Clear the scene: delete " + child.Name
                 app.DeleteObj("B:" + child.Name)
 
     stage = Usd.Stage.Open(file_path)
+    up_axis = UsdGeom.GetStageUpAxis(stage)
+    options["up_axis"] = up_axis  # Y or Z (for Softimage Y is more convinient)
     root = stage.GetPseudoRoot()
     for item in root.GetChildren():
-        import_item(app, options, item, stage, app.ActiveProject2.ActiveScene.Root, is_root=True)
+        import_item(app, options, item, stage, app.ActiveProject2.ActiveScene.Root, progress_bar, is_root=True)
 
-    if is_clear and options["import_camera"]:
-        for cam in cameras_to_remove:
-            app.DeleteObj("B:" + cam.Name)
+    if is_clear:
+        progress_bar.Caption = "Final clean"
+        for cam_index in range(len(cameras_to_remove) + (0 if options["import_camera"] else -1)):  # delete all cameras except the last one, if there are no any new cameras in the imported scene
+            app.DeleteObj("B:" + cameras_to_remove[cam_index].Name)
+
+    progress_bar.Visible = False
 
 
 def geather_childrens(usd_prim):
@@ -67,30 +80,31 @@ def get_number_of_essential_components(components):
     return to_return, list(names)
 
 
-def import_item_simple(app, options, usd_item, usd_stage, xsi_parent):
+def import_item_simple(app, options, usd_item, usd_stage, xsi_parent, progress_bar):
     '''import item and all it subcomponents in simple mode (in non-xform based approach)
     '''
-    local_root = emit_item(app, options, usd_item, xsi_parent)
+    local_root = emit_item(app, options, usd_item, xsi_parent, progress_bar)
     if local_root is not None:
         for child in usd_item.GetChildren():
             # for all, exept Xform. For Xform we will try to use import_item
             item_type = child.GetTypeName()
             new_object = None
             if item_type != "Xform":
-                new_object = emit_item(app, options, child, local_root)
-            import_item(app, options, child, usd_stage, new_object if new_object is not None else local_root)
+                new_object = emit_item(app, options, child, local_root, progress_bar)
+            import_item(app, options, child, usd_stage, new_object if new_object is not None else local_root, progress_bar)
 
 
-def emit_item(app, options, usd_item, xsi_parent, predefined_name=None, predefined_visibility=None, predefined_tfm=None):
+def emit_item(app, options, usd_item, xsi_parent, progress_bar, predefined_name=None, predefined_visibility=None, predefined_tfm=None):
     '''return new created object
     '''
+    progress_bar.Caption = "Import " + str(usd_item)
     item_type = usd_item.GetTypeName()
     new_object = None
     xform_name = predefined_name if predefined_name is not None else usd_item.GetName()
     usd_tfm = predefined_tfm if predefined_tfm is not None else prim_xform.get_transform(usd_item)
     is_visible = predefined_visibility if predefined_visibility is not None else prim_xform.get_visibility(usd_item)
     if item_type == "Xform" and constants.siNullPrimType in options["object_types"]:
-        new_object = prim_xform.emit_null(app, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
+        new_object = prim_xform.emit_null(app, xform_name, usd_tfm, is_visible, usd_item, xsi_parent, options["up_axis"])
     elif item_type == "Mesh" and constants.siPolyMeshType in options["object_types"]:
         new_object = prim_mesh.emit_mesh(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
     elif item_type == "Points" and "pointcloud" in options["object_types"]:
@@ -107,7 +121,7 @@ def emit_item(app, options, usd_item, xsi_parent, predefined_name=None, predefin
     return new_object
 
 
-def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
+def import_item(app, options, usd_item, usd_stage, xsi_parent, progress_bar, is_root=False):
     '''Use xform-based approach. It means, that each object defined by subcomponent of the xform node
     options contains keys:
             clear_scene (True/False),
@@ -141,7 +155,7 @@ def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
                 utils.set_xsi_transform(app, xsi_model, usd_tfm)
                 # instert objects inside this model
                 for child in usd_master.GetChildren():
-                    import_item(app, options, child, usd_stage, xsi_model)
+                    import_item(app, options, child, usd_stage, xsi_model, progress_bar)
                 # save the link to the model onject
                 options["instances"][str(usd_master.GetPath())] = xsi_model
         else:
@@ -150,42 +164,42 @@ def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
             if ess_comp_count == 0 and constants.siNullPrimType in options["object_types"]:
                 # all childrens are XForms, so current object should be also null
                 # create it and iterate throw children
-                new_object = emit_item(app, options, usd_item, xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                new_object = emit_item(app, options, usd_item, xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
             elif ess_comp_count == 1 and not utils.is_contains_transform(childrens[ess_comp_names[0]][0]):
                 # there is exactly one essential componen and it does not contains transfrom
                 # so, current xform is object with this component
                 if ess_comp_names[0] == "Mesh" and constants.siPolyMeshType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["Mesh"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["Mesh"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "Points" and "pointcloud" in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["Points"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["Points"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "BasisCurves" and "strands" in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["BasisCurves"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["BasisCurves"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "Camera" and constants.siCameraPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["Camera"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["Camera"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "SphereLight" and constants.siLightPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["SphereLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["SphereLight"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "DistantLight" and constants.siLightPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["DistantLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["DistantLight"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "LightPortal" and constants.siLightPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["LightPortal"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["LightPortal"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "RectLight" and constants.siLightPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["RectLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["RectLight"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "DiskLight" and constants.siLightPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["DiskLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["DiskLight"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "DomeLight" and constants.siLightPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["DomeLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["DomeLight"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "CylinderLight" and constants.siLightPrimType in options["object_types"]:
-                    new_object = emit_item(app, options, childrens["CylinderLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
+                    new_object = emit_item(app, options, childrens["CylinderLight"][0], xsi_parent, progress_bar, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
             else:
                 # current is Xform, but it contains either several essential components, or one component but with transform
                 # in this case we should create the null and all subcomponents emit as separate objects
-                import_item_simple(app, options, usd_item, usd_stage, xsi_parent)
+                import_item_simple(app, options, usd_item, usd_stage, xsi_parent, progress_bar)
             if new_object is not None:
                 for child in childrens.get("Xform", []):
-                    import_item(app, options, child, usd_stage, new_object)
+                    import_item(app, options, child, usd_stage, new_object, progress_bar)
     else:
         if is_root:
-            import_item_simple(app, options, usd_item, usd_stage, xsi_parent)
+            import_item_simple(app, options, usd_item, usd_stage, xsi_parent, progress_bar)
         else:
             for child in usd_item.GetChildren():
-                import_item_simple(app, options, child, usd_stage, xsi_parent)
+                import_item_simple(app, options, child, usd_stage, xsi_parent, progress_bar)

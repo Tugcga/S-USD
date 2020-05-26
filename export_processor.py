@@ -25,6 +25,7 @@ def export(app, file_path, params, xsi_toolkit):
     imp.reload(utils)
 
     progress_bar = xsi_toolkit.ProgressBar
+    progress_bar.Caption = ""
     progress_bar.CancelEnabled = False
     progress_bar.Visible = True
 

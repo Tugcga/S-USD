@@ -2,6 +2,9 @@ from pxr import Usd, UsdGeom
 import utils
 import imp
 
+# ---------------------------------------------------------
+# ----------------------export-----------------------------
+
 
 def add_transform_to_xfo(usd_xform, obj, opt_anim):
     if opt_anim is None or not utils.is_transform_animated(obj, opt_anim):
@@ -51,6 +54,10 @@ def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, 
         return usd_xform, None, None
 
 
+# ---------------------------------------------------------
+# ----------------------import-----------------------------
+
+
 def get_transform(usd_item):
     usd_xform = UsdGeom.Xformable(usd_item)
     times_array = usd_xform.GetTimeSamples()  # array of time samples, it empty if no animation
@@ -67,8 +74,8 @@ def get_visibility(usd_item):
     return vis_attr == "inherited"
 
 
-def emit_null(app, null_name, usd_tfm, visibility, usd_prim, xsi_parent):
+def emit_null(app, null_name, usd_tfm, visibility, usd_prim, xsi_parent, up_key):
     xsi_null = app.GetPrim("Null", null_name, xsi_parent)
-    utils.set_xsi_transform(app, xsi_null, usd_tfm)
+    utils.set_xsi_transform(app, xsi_null, usd_tfm, up_key=up_key)
     utils.set_xsi_visibility(xsi_null, visibility)
     return xsi_null

@@ -353,17 +353,23 @@ def build_export_object_caption(obj, frame=None):
     return "Export object " + obj.Name + (" (frame " + str(frame) + ")" if frame is not None else "")
 
 
-def set_xsi_transform_at_frame(app, xsi_object, usd_tfm, frame=None):
+def set_xsi_transform_at_frame(app, xsi_object, usd_tfm, up_key, frame=None):
     # set tfm matrix
     tfm_matrix = xsi_object.Kinematics.Local.Transform.Matrix4
     row_00 = usd_tfm.GetRow(0)
     row_01 = usd_tfm.GetRow(1)
     row_02 = usd_tfm.GetRow(2)
     row_03 = usd_tfm.GetRow(3)
-    tfm_matrix.Set(row_00[0], row_00[1], row_00[2], row_00[3],
-                   row_01[0], row_01[1], row_01[2], row_01[3],
-                   row_02[0], row_02[1], row_02[2], row_02[3],
-                   row_03[0], row_03[1], row_03[2], row_03[3])
+    if up_key == "Y":
+        tfm_matrix.Set(row_00[0], row_00[1], row_00[2], row_00[3],
+                       row_01[0], row_01[1], row_01[2], row_01[3],
+                       row_02[0], row_02[1], row_02[2], row_02[3],
+                       row_03[0], row_03[1], row_03[2], row_03[3])
+    else:
+        tfm_matrix.Set(row_00[0], row_00[2], row_00[1], row_00[3],
+                       row_02[0], row_02[2], row_02[1], row_02[3],
+                       row_01[0], row_01[2], row_01[1], row_01[3],
+                       row_03[0], row_03[2], row_03[1], row_03[3])
     # form transform
     new_transfrom = xsi_object.Kinematics.Local.Transform
     new_transfrom.SetMatrix4(tfm_matrix)
@@ -385,16 +391,16 @@ def set_xsi_transform_at_frame(app, xsi_object, usd_tfm, frame=None):
         app.SaveKey(xsi_object.Name + ".kine.local.sclz", frame, xsi_scale.Z)
 
 
-def set_xsi_transform(app, xsi_obj, usd_tfm):
+def set_xsi_transform(app, xsi_obj, usd_tfm, up_key="Y"):
     tfm_data = usd_tfm[0]
     time_samples = usd_tfm[1]
     if len(time_samples) == 0:
         # no animation
-        set_xsi_transform_at_frame(app, xsi_obj, tfm_data)
+        set_xsi_transform_at_frame(app, xsi_obj, tfm_data, up_key)
     else:
         for i in range(len(time_samples)):
             frame = time_samples[i]
-            set_xsi_transform_at_frame(app, xsi_obj, tfm_data[i], frame=frame)
+            set_xsi_transform_at_frame(app, xsi_obj, tfm_data[i], up_key, frame=frame)
 
 
 def set_xsi_visibility(xsi_obj, is_visible):
@@ -462,13 +468,21 @@ def transpose_4vectors_array(array):
     return [x, y, z, w]
 
 
-def usd_to_xsi_faces_array(face_indexes, face_sizes):
+def usd_to_xsi_faces_array(face_indexes, face_sizes, up_axis):
+    # if up_axis = Z, then we should invert polygons
     polygons = []
     index = 0
     for f in face_sizes:
         polygons.append(f)
+        start_polygon_index = index  # index of the first point in the polygon
         for i in range(f):
-            polygons.append(face_indexes[index])
+            if up_axis == "Y":
+                polygons.append(face_indexes[index])
+            else:  # invert the polygon
+                if i == 0:  # the first point is the same
+                    polygons.append(face_indexes[index])
+                else:  # all other point shoyld be done from the end
+                    polygons.append(face_indexes[start_polygon_index + f - i])
             index += 1
     return polygons
 
@@ -674,3 +688,13 @@ def get_index_in_frames_array(array, value):
 def get_normalized(vector):
     l = math.sqrt(vector[0]**2 + vector[1]**2 + vector[2]**2)
     return (vector[0] / l, vector[1] / l, vector[2] / l)
+
+
+def vector_mult_to_matrix(vector, matrix):
+    to_return = []
+    for i in range(3):
+        s = 0
+        for j in range(4):
+            s += (vector[j] if j < 3 else 1) * matrix[j][i]
+        to_return.append(s)
+    return to_return

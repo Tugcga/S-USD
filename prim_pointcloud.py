@@ -6,6 +6,9 @@ import materials
 import utils
 import imp
 
+# ---------------------------------------------------------
+# ----------------------export-----------------------------
+
 
 def set_pointcloud_at_frame(pointcloud_geometry, usd_pointcloud, usd_points_prim, frame=None):
     xsi_pp = pointcloud_geometry.GetICEAttributeFromName("PointPosition")
@@ -62,6 +65,10 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
 
 
+# ---------------------------------------------------------
+# ----------------------import-----------------------------
+
+
 def split_positions_to_strands_and_points(raw_positions, segment_length):
     strands = []
     points = []
@@ -100,7 +107,7 @@ def write_ice_cache_at_frame(folder_path, object_name, raw_points, width_data, s
     ic.write(folder_path + object_name + ("_" + str(frame) if frame is not None else "") + ".icecache")
 
 
-def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_name):
+def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_name, up_key):
     folder_path = project_path + "\\Simulation\\usd_cache\\" + file_name + "\\"
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
@@ -122,7 +129,7 @@ def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_n
     segments_data = None
 
     if is_constant_points:
-        raw_positions = usd_points.Get()
+        raw_positions = usd_points.Get() if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get()]
         if is_strands:
             if is_constant_segments:
                 segments_data = usd_segments.Get()
@@ -135,7 +142,7 @@ def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_n
         write_ice_cache_at_frame(folder_path, xsi_object.Name, raw_positions, width_data, segments_data)
     else:
         for frame in point_times:
-            raw_positions = usd_points.Get(frame)
+            raw_positions = usd_points.Get(frame) if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get(frame)]
             if is_strands:
                 if is_constant_segments:
                     segments_data = usd_segments.Get()
@@ -169,10 +176,10 @@ def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim,
     imp.reload(utils)
     usd_object = UsdGeom.BasisCurves(usd_prim) if is_strands else UsdGeom.Points(usd_prim)
     xsi_points = app.GetPrim("PointCloud", pointloud_name, xsi_parent)
-    utils.set_xsi_transform(app, xsi_points, usd_tfm)
+    utils.set_xsi_transform(app, xsi_points, usd_tfm, up_key=options["up_axis"])
     utils.set_xsi_visibility(xsi_points, visibility)
     if "project_path" in options:
-        is_constant = write_ice_cache(usd_object, is_strands, xsi_points, options["project_path"], options["file_name"])
+        is_constant = write_ice_cache(usd_object, is_strands, xsi_points, options["project_path"], options["file_name"], options["up_axis"])
         # build ice-tree with caching node
         build_ice_tree(app, xsi_points, is_constant, options["file_name"])
 

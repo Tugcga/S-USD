@@ -90,30 +90,6 @@ def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mes
             usd_normals_attr.Set(xsi_normals, Usd.TimeCode(frame))
         usd_mesh.SetNormalsInterpolation(UsdGeom.Tokens.faceVarying)
 
-    # weightmaps
-    '''if "weightmap" in opt_attributes:
-        xsi_vertex_clusters = xsi_polygonmesh.Clusters.Filter("pnt")
-        for pnt_cluster in xsi_vertex_clusters:
-            if pnt_cluster.IsAlwaysComplete():
-                index_to_vertex = pnt_cluster.Elements.Array  # use it for map from cluster index to vertex index
-                for cls_prop in pnt_cluster.Properties:
-                    if cls_prop.Type == "wtmap":  # this complete cluster is weight map
-                        prop_name = cls_prop.Name
-                        xsi_cluster_data = []
-                        c_elements = cls_prop.Elements
-                        c_count = len(c_elements)
-                        for c_e in range(c_count):
-                            xsi_cluster_data.append((index_to_vertex[c_e], c_elements[c_e][0]))
-                        xsi_cluster_data = sorted(xsi_cluster_data, key=lambda x: x[0])
-                        xsi_weights = []
-                        for c in xsi_cluster_data:
-                            xsi_weights.append(c[1])
-                        usd_weight_attr = usd_mesh_primvar.CreatePrimvar(prop_name, Sdf.ValueTypeNames.FloatArray, UsdGeom.Tokens.vertex)
-                        if frame is None:
-                            usd_weight_attr.Set(xsi_weights)
-                        else:
-                            usd_weight_attr.Set(xsi_weights, Usd.TimeCode(frame))'''
-
     # vertex creases
     if "vertex_creases" in opt_attributes:
         xsi_vertex_creases_values = []
@@ -347,17 +323,26 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
 # -------------------import------------------------------------
 
 
-def read_points(usd_mesh):
+def read_points(usd_mesh, up_axis):
     to_return = []
     usd_points = usd_mesh.GetPointsAttr()
     times = usd_points.GetTimeSamples()
+    in_mesh_tfm = usd_mesh.GetLocalTransformation()  # get at fisrt frame, ignore the animation
+    # in_mesh_tfm is a row-based matrix, the last row is position, the last column is 0, 0, 0, 1
     sorted(times)
     if len(times) <= 0:
-        to_return.append((0, usd_points.Get()))
+        tfm_positions = [utils.vector_mult_to_matrix(p, in_mesh_tfm) for p in usd_points.Get()]
+        if up_axis == "Y":
+            to_return.append((0, tfm_positions))
+        else:  # convert each vertex positions, swap y and z coordinates
+            to_return.append((0, [(p[0], p[2], p[1]) for p in tfm_positions]))
     else:
         for frame in times:
-            points_at_frame = usd_points.Get(frame)
-            to_return.append((frame, points_at_frame))
+            points_at_frame = [utils.vector_mult_to_matrix(p, in_mesh_tfm) for p in usd_points.Get(frame)]
+            if up_axis == "Y":
+                to_return.append((frame, points_at_frame))
+            else:
+                to_return.append((frame, [(p[0], p[2], p[1]) for p in points_at_frame]))
 
     return to_return
 
@@ -388,7 +373,6 @@ def read_face_indexes(usd_mesh):
         for frame in times:
             indexes_at_frame = usd_indexes.Get(frame)
             array.append((frame, indexes_at_frame))
-        # sorted(array, key=lambda x: x[0])
         return array
 
 
@@ -433,17 +417,23 @@ def read_vertex_creases(usd_mesh):
     return to_return
 
 
-def read_normals(usd_mesh):
+def read_normals(usd_mesh, up_axis):
     to_return = []
     usd_normals = usd_mesh.GetNormalsAttr()
     times = usd_normals.GetTimeSamples()
+    in_mesh_tfm = usd_mesh.GetLocalTransformation()
     sorted(times)
     if len(times) <= 1:
-        to_return.append((0, usd_normals.Get()))
+        usd_normals_data = usd_normals.Get()
+        if usd_normals_data is not None:
+            usd_normals_data_tfm = [utils.vector_mult_to_matrix(n, in_mesh_tfm) for n in usd_normals_data]
+            to_return.append((0, usd_normals_data_tfm if up_axis == "Y" else [(n[0], n[2], n[1]) for n in usd_normals_data_tfm]))
     else:
         for frame in times:
             vals_at_frame = usd_normals.Get(frame)
-            to_return.append((frame, vals_at_frame))
+            if vals_at_frame is not None:
+                vals_at_frame_tfm = [utils.vector_mult_to_matrix(n, in_mesh_tfm) for n in vals_at_frame]
+                to_return.append((frame, vals_at_frame_tfm if up_axis == "Y" else [(n[0], n[2], n[1]) for n in vals_at_frame_tfm]))
 
     return to_return
 
@@ -553,12 +543,12 @@ def read_mesh_data(mesh_options, data_dict, file_path=None, mesh_path=None, usd_
         # we should get data of all attributes from usd_mesh and save it to data_dict by different keys
         # animated format is the following: it is an array of tuples [(frame, data at frame), ...]
         # if there is only one frame (or zero), then data is an one-element array [(0, data)]
-        data_dict["points"] = read_points(usd_mesh)
+        data_dict["points"] = read_points(usd_mesh, mesh_options["up_axis"])
         data_dict["face_sizes"] = read_face_sizes(usd_mesh)
         data_dict["face_indexes"] = read_face_indexes(usd_mesh)
         attrs = mesh_options.get("attributes", [])
         if "normal" in attrs:
-            data_dict["normals"] = read_normals(usd_mesh)
+            data_dict["normals"] = read_normals(usd_mesh, mesh_options["up_axis"])
         if "uvmap" in attrs:
             data_dict["uvs"] = read_uvs(usd_mesh)
         if "color" in attrs:
@@ -607,7 +597,7 @@ def setup_weights_cluster(app, xsi_geometry):
     return weight_cls
 
 
-def import_setup_normals(app, normals, xsi_geometry):
+def import_setup_normals(app, normals, xsi_geometry, is_topology_change):
     if normals is not None and len(normals) > 0:
         normals_cls = setup_normals_cluster(app, xsi_geometry)
         normal_name = "User_Normal_Property"
@@ -618,7 +608,6 @@ def import_setup_normals(app, normals, xsi_geometry):
             new_normals_prop = app.AddProp("User Normal Property", normals_cls.FullName, constants.siDefaultPropagation, normal_name)
             normals_prop = new_normals_prop[1][0]
         xsi_normals = utils.transpose_vectors_array(normals)
-        # print(normals_cls.IsAlwaysComplete(), len(normals_prop.Elements.Array[0]), normals_prop.Elements.Count, len(xsi_normals[0]))
         if normals_prop.Elements.Count == len(xsi_normals[0]):
             normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
 
@@ -695,7 +684,7 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         face_size = utils.get_closest_data(face_size_data, frame)
         face_indexes = utils.get_closest_data(face_indexes_data, frame)
 
-        xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size))
+        xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size, mesh_options["up_axis"]))
 
         # sset attributes only for non-changed topology
         if not is_topology_change:
@@ -793,16 +782,18 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
     imp.reload(utils)
     usd_mesh = UsdGeom.Mesh(usd_prim)
     xsi_mesh = app.GetPrim("EmptyPolygonMesh", mesh_name, xsi_parent)
-    utils.set_xsi_transform(app, xsi_mesh, usd_tfm)
+    utils.set_xsi_transform(app, xsi_mesh, usd_tfm, up_key=options["up_axis"])
     utils.set_xsi_visibility(xsi_mesh, visibility)
+
     xsi_geometry = xsi_mesh.ActivePrimitive.Geometry
 
     mesh_attributes = options.get("attributes", [])
     is_animated, is_topology_changed = utils.is_animated_mesh(usd_mesh, mesh_attributes)  # is_animated true if at least one of attributes has time changes
-    mesh_options = {"attributes": mesh_attributes}
+    mesh_options = {"attributes": mesh_attributes,
+                    "up_axis": options["up_axis"]}
     if not is_animated:
         # simply apply geometry
-        mesh_options["is_topology_change"] = True  # for non-operator approach we should create full topology
+        mesh_options["is_topology_change"] = False
         data_dict = {}
         read_mesh_data(mesh_options, data_dict, usd_mesh=usd_mesh)
         set_geometry_from_data(app, xsi_geometry, mesh_options, data_dict)
@@ -810,6 +801,7 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
         # create operator, which updates topology every frame
         operator = app.AddCustomOp("USDMeshOperator", xsi_mesh.ActivePrimitive, "", "USDMeshOperator")
         operator.Parameters("file_path").Value = options["file_path"]
+        operator.Parameters("up_axis").Value = options["up_axis"]
         operator.Parameters("mesh_path").Value = str(usd_prim.GetPath())
         operator.Parameters("is_topology_change").Value = is_topology_changed
         operator.Parameters("is_uvs").Value = "uvmap" in mesh_attributes

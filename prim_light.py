@@ -4,6 +4,9 @@ import materials
 import utils
 import imp
 
+# ---------------------------------------------------------
+# ----------------------export-----------------------------
+
 
 def set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, frame=None, change_keys=None):
     if xsi_light_type == 0 and xsi_geom_type == 1:  # rectangular light
@@ -260,6 +263,8 @@ def add_cycles_light(app, params, path_for_objects, stage, cyc_light, materials_
 
 # -----------------------------------------------------
 # ---------------------import--------------------------
+
+
 def set_import_parameter(app, xsi_light, param_name, usd_attribute):
     time = usd_attribute.GetTimeSamples()
     if len(time) > 1:
@@ -307,13 +312,13 @@ def set_import_light_geometry(app, xsi_light, usd_light, light_type):
         set_import_parameter(app, xsi_light, "LightAreaXformSZ", usd_length)
 
 
-def emit_default_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent):
+def emit_default_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent, up_key):
     xsi_light = None
     if light_type == "DistantLight":
         xsi_light = app.GetPrimLight("Infinite.Preset", light_name, xsi_parent)
         usd_light = UsdLux.DistantLight(usd_prim)
         # for distance we set transform
-        utils.set_xsi_transform(app, xsi_light, usd_tfm)
+        utils.set_xsi_transform(app, xsi_light, usd_tfm, up_key=up_key)
         utils.set_xsi_visibility(xsi_light, visibility)
         # and diffuse and specular params
         set_import_diffuse_param(app, xsi_light, usd_light)
@@ -324,7 +329,7 @@ def emit_default_light(app, light_name, usd_tfm, visibility, usd_prim, light_typ
             # cast ptim to light
             usd_light = UsdLux.SphereLight(usd_prim) if light_type == "SphereLight" else (UsdLux.RectLight(usd_prim) if light_type == "RectLight" else (UsdLux.DiskLight(usd_prim) if light_type == "DiskLight" else UsdLux.CylinderLight(usd_prim)))
             # set transform
-            utils.set_xsi_transform(app, xsi_light, usd_tfm)
+            utils.set_xsi_transform(app, xsi_light, usd_tfm, up_key=up_key)
             utils.set_xsi_visibility(xsi_light, visibility)
             # set diffuse and specular
             set_import_diffuse_param(app, xsi_light, usd_light)
@@ -335,7 +340,7 @@ def emit_default_light(app, light_name, usd_tfm, visibility, usd_prim, light_typ
     return xsi_light
 
 
-def emit_sycles_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent):
+def emit_sycles_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent, up_key):
     xsi_light = None
     usd_light = None
     # cylinder light is not suported by cycles lighst
@@ -368,7 +373,7 @@ def emit_sycles_light(app, light_name, usd_tfm, visibility, usd_prim, light_type
         usd_light = UsdLux.DomeLight(usd_prim)
     if xsi_light is not None:
         # set transform
-        utils.set_xsi_transform(app, xsi_light, usd_tfm)
+        utils.set_xsi_transform(app, xsi_light, usd_tfm, up_key=up_key)
         utils.set_xsi_visibility(xsi_light, visibility)
 
         # for all lights (except dome light and portal) we can set diffuse, specular, intensity
@@ -383,6 +388,6 @@ def emit_sycles_light(app, light_name, usd_tfm, visibility, usd_prim, light_type
 def emit_light(app, options, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent):
     light_mode = options.get("light_mode", 0)
     if light_mode == 1:
-        return emit_sycles_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent)
+        return emit_sycles_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent, options["up_axis"])
     else:
-        return emit_default_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent)
+        return emit_default_light(app, light_name, usd_tfm, visibility, usd_prim, light_type, xsi_parent, options["up_axis"])

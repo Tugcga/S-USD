@@ -60,10 +60,10 @@ def USDImportCommand_Init(in_ctxt):
 def USDImportCommand_Execute(*args):
     app.LogMessage("USDImport_Execute called", constants.siVerbose)
     # read arguments of the command
-    file_path = args[0] if args[0] is not None else "D:\\Graphic\\For Softimage\\Projects\\USD Development\\Models\\test.usda"
+    file_path = args[0]
     attributes = args[1] if args[1] is not None else ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')
     object_types = args[2] if args[2] is not None else ("strands", constants.siModelType, constants.siNullPrimType, constants.siPolyMeshType, constants.siLightPrimType, constants.siCameraPrimType, "pointcloud")
-    clear_scene = args[3] if args[3] is not None else True
+    clear_scene = args[3] if args[3] is not None else False
     is_materials = args[4] if args[4] is not None else True
     light_mode = args[5] if args[5] is not None else 0  # default light mode use default lights
 
@@ -75,8 +75,8 @@ def USDImportCommand_Execute(*args):
                       "XSIMath": XSIMath}
 
     imp.reload(import_processor)
-    if os.path.isfile(file_path):
-        import_processor.import_usd(app, file_path, import_options)
+    if file_path is not None and len(file_path) > 0 and os.path.isfile(file_path):
+        import_processor.import_usd(app, file_path, import_options, XSIUIToolkit)
     else:
         app.LogMessage("Select an *.usd file", constants.siWarning)
 
@@ -93,7 +93,7 @@ def USDImportOpen_Execute():
         with open(props_path, "r") as file:
             import_props = eval(file.read())
     else:  # set default values
-        import_props = {"clear_scene": True,
+        import_props = {"clear_scene": False,
                         "materials": True,
                         "is_polymesh": True,
                         "is_lights": True,

@@ -3,6 +3,9 @@ from prim_xform import add_xform
 import utils
 import imp
 
+# ---------------------------------------------------------
+# ----------------------export-----------------------------
+
 
 def set_camera_focallength(xsi_camera, usd_camera, frame=None):
     xsi_focal_length = (xsi_camera.Parameters("projplanedist").Value if frame is None else xsi_camera.Parameters("projplanedist").GetValue2(frame))
@@ -75,7 +78,11 @@ def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
 
 
-def import_set_interest_at_frame(app, xsi_camera, xsi_interest, distance, usd_tfm, frame=None):
+# ---------------------------------------------------------
+# ----------------------import-----------------------------
+
+
+def import_set_interest_at_frame(app, xsi_camera, xsi_interest, distance, usd_tfm, up_key, frame=None):
     # if frame is None, then this is static value, in other case we should create the animation key
     # calculate osition of the iterest point, for this we should get direction of the camera
     direction = utils.get_normalized(usd_tfm.GetRow(2))
@@ -93,7 +100,7 @@ def import_set_interest_at_frame(app, xsi_camera, xsi_interest, distance, usd_tf
         app.SaveKey(xsi_interest.Name + ".kine.local.posz", frame, xsi_translation.Z)
 
 
-def import_define_camera(app, xsi_camera, xsi_interest, usd_camera, usd_tfm):
+def import_define_camera(app, xsi_camera, xsi_interest, usd_camera, usd_tfm, up_key):
     usd_clip_range = usd_camera.GetClippingRangeAttr()
     usd_clip_range_time = usd_clip_range.GetTimeSamples()
     if len(usd_clip_range_time) <= 1:
@@ -127,11 +134,11 @@ def import_define_camera(app, xsi_camera, xsi_interest, usd_camera, usd_tfm):
         usd_focus = usd_camera.GetFocusDistanceAttr()
         usd_focus_time = usd_focus.GetTimeSamples()
         if len(usd_focus_time) <= 1:
-            import_set_interest_at_frame(app, xsi_camera, xsi_interest, usd_focus.Get(), usd_tfm[0])
+            import_set_interest_at_frame(app, xsi_camera, xsi_interest, usd_focus.Get(), usd_tfm[0], up_key)
         else:
             for frame in usd_focus_time:
                 frame_index = utils.get_index_in_frames_array(usd_tfm[1], frame)
-                import_set_interest_at_frame(app, xsi_camera, xsi_interest, usd_focus.Get(frame), usd_tfm[0][frame_index if frame_index > -1 else 0], frame=frame)
+                import_set_interest_at_frame(app, xsi_camera, xsi_interest, usd_focus.Get(frame), usd_tfm[0][frame_index if frame_index > -1 else 0], up_key, frame=frame)
 
 
 def emit_camera(app, options, camera_name, usd_tfm, visibility, usd_prim, xsi_parent):
@@ -149,11 +156,11 @@ def emit_camera(app, options, camera_name, usd_tfm, visibility, usd_prim, xsi_pa
             xsi_interest = ch
 
     usd_camera = UsdGeom.Camera(usd_prim)
-    utils.set_xsi_transform(app, xsi_camera, usd_tfm)
+    utils.set_xsi_transform(app, xsi_camera, usd_tfm, up_key=options["up_axis"])
     utils.set_xsi_visibility(xsi_camera, visibility)
     if xsi_interest is not None:
         utils.set_xsi_visibility(xsi_interest, visibility)
 
-    import_define_camera(app, xsi_camera, xsi_interest, usd_camera, usd_tfm)
+    import_define_camera(app, xsi_camera, xsi_interest, usd_camera, usd_tfm, options["up_axis"])
 
     return xsi_camera

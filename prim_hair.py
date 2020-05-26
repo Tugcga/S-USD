@@ -4,6 +4,9 @@ import materials
 import utils
 import imp
 
+# ---------------------------------------------------------
+# ----------------------export-----------------------------
+
 
 def set_curves_data(usd_curves, usd_curves_prim, data_points, data_vertex_count, data_width, frame=None):
     # prepare usd attributes
