@@ -96,6 +96,16 @@ def is_sycles_install(app):
     return False
 
 
+def is_contains_camera(root):
+    if root.Type == "camera":
+        return True
+    else:
+        for ch in root.Children:
+            if is_contains_camera(ch):
+                return True
+        return False
+
+
 def is_stands(pc_object):
     pc_geo = pc_object.GetActivePrimitive2().Geometry
     strands_position_attr = pc_geo.GetICEAttributeFromName("StrandPosition")
@@ -652,3 +662,15 @@ def extract_subarray(array, array_of_steps):
         to_return.append(array[index])
         index += step
     return to_return
+
+
+def get_index_in_frames_array(array, value):
+    for i in range(len(array)):
+        if array[i] == value:
+            return i
+    return -1
+
+
+def get_normalized(vector):
+    l = math.sqrt(vector[0]**2 + vector[1]**2 + vector[2]**2)
+    return (vector[0] / l, vector[1] / l, vector[2] / l)

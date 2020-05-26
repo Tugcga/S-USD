@@ -6,6 +6,7 @@ import prim_hair
 import prim_mesh
 import prim_pointcloud
 import prim_light
+import prim_camera
 import imp
 
 
@@ -16,29 +17,30 @@ def import_usd(app, file_path, options):
     imp.reload(prim_pointcloud)
     imp.reload(prim_hair)
     imp.reload(prim_light)
+    imp.reload(prim_camera)
     is_clear = options.get("clear_scene", False)
     options["instances"] = {}  # key - path of the imported master object, value - link to the corresponding xsi-object
     options["file_path"] = file_path
     options["project_path"] = app.ActiveProject3.Path
     options["file_name"] = utils.get_file_name_from_path(file_path)  # without extension
-    last_object_to_remove = None
+    options["import_camera"] = False
+    cameras_to_remove = []
     if is_clear:
         scene_root = app.ActiveProject2.ActiveScene.Root
         for child in scene_root.Children:
-            if child.Type != "CameraRoot":
-                app.DeleteObj("B:" + child.Name)
+            if utils.is_contains_camera(child):
+                cameras_to_remove.append(child)
             else:
-                last_object_to_remove = child
+                app.DeleteObj("B:" + child.Name)
 
     stage = Usd.Stage.Open(file_path)
     root = stage.GetPseudoRoot()
     for item in root.GetChildren():
         import_item(app, options, item, stage, app.ActiveProject2.ActiveScene.Root, is_root=True)
-    # for prim_ref in stage.Traverse():
-        # print(prim_ref.GetPath())
 
-    '''if last_object_to_remove is not None:
-        app.DeleteObj("B:" + last_object_to_remove.Name)'''
+    if is_clear and options["import_camera"]:
+        for cam in cameras_to_remove:
+            app.DeleteObj("B:" + cam.Name)
 
 
 def geather_childrens(usd_prim):
@@ -97,6 +99,10 @@ def emit_item(app, options, usd_item, xsi_parent, predefined_name=None, predefin
         new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, True, xsi_parent)
     elif item_type in ["SphereLight", "DistantLight", "LightPortal", "RectLight", "DiskLight", "DomeLight", "CylinderLight"] and constants.siLightPrimType in options["object_types"]:
         new_object = prim_light.emit_light(app, options, xform_name, usd_tfm, is_visible, usd_item, item_type, xsi_parent)
+    elif item_type == "Camera" and constants.siCameraPrimType in options["object_types"]:
+        new_object = prim_camera.emit_camera(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
+        if new_object is not None:
+            options["import_camera"] = True
 
     return new_object
 
@@ -155,7 +161,7 @@ def import_item(app, options, usd_item, usd_stage, xsi_parent, is_root=False):
                 elif ess_comp_names[0] == "BasisCurves" and "strands" in options["object_types"]:
                     new_object = emit_item(app, options, childrens["BasisCurves"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "Camera" and constants.siCameraPrimType in options["object_types"]:
-                    pass
+                    new_object = emit_item(app, options, childrens["Camera"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "SphereLight" and constants.siLightPrimType in options["object_types"]:
                     new_object = emit_item(app, options, childrens["SphereLight"][0], xsi_parent, predefined_name=xform_name, predefined_visibility=is_visible, predefined_tfm=usd_tfm)
                 elif ess_comp_names[0] == "DistantLight" and constants.siLightPrimType in options["object_types"]:
