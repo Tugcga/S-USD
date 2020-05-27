@@ -400,7 +400,7 @@ def set_xsi_transform(app, xsi_obj, usd_tfm, up_key="Y", add_tfm=None):
     else:
         for i in range(len(time_samples)):
             frame = time_samples[i]
-            set_xsi_transform_at_frame(app, xsi_obj, tfm_data[i] if add_tfm is None else add_tfm * tfm_data, up_key, frame=frame)
+            set_xsi_transform_at_frame(app, xsi_obj, tfm_data[i] if add_tfm is None else add_tfm * tfm_data[i], up_key, frame=frame)
 
 
 def set_xsi_visibility(xsi_obj, is_visible):
@@ -571,16 +571,18 @@ def get_extension_from_params(params):
         return opts.get("extension", "usd")
 
 
-def verify_extension(file_path):
+def verify_extension(app, file_path):
     path_head, path_tail = os.path.split(file_path)
     point_index = path_tail.rfind(".")
     if point_index < 0:
+        print("[USD export]: set extension of the output file *.usda")
         return file_path + ".usda"
     else:
         file_ext = path_tail[point_index + 1:]
         if file_ext in ["usd", "usda", "usdz"]:
             return file_path
         else:
+            print("[USD export]: change extension of the output file to *.usda")
             return path_head + "\\" + path_tail[:point_index] + ".usda"
 
 

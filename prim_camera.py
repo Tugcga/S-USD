@@ -35,6 +35,36 @@ def set_camera_clip_planes(xsi_camera, usd_camera, opt_animation):
         usd_clip_attribute.Set((xsi_camera.Parameters("near").Value, xsi_camera.Parameters("far").Value))
 
 
+def set_camera_aperture(xsi_camera, usd_camera, opt_animation):
+    usd_hor_ap = usd_camera.CreateHorizontalApertureAttr()
+    usd_vert_ap = usd_camera.CreateVerticalApertureAttr()
+    usd_hor_shift = usd_camera.CreateHorizontalApertureOffsetAttr()
+    usd_ver_shift = usd_camera.CreateVerticalApertureOffsetAttr()
+    if utils.is_param_animated(xsi_camera.Parameters("projplanewidth"), opt_animation):
+        for frame in range(opt_animation[0], opt_animation[1] + 1):
+            usd_hor_ap.Set(xsi_camera.Parameters("projplanewidth").GetValue(frame) * 25.4, Usd.TimeCode(frame))
+    else:
+        usd_hor_ap.Set(xsi_camera.Parameters("projplanewidth").Value * 25.4)  # in Softimage these valueas are in inches, but in usd in millimeters
+
+    if utils.is_param_animated(xsi_camera.Parameters("projplaneheight"), opt_animation):
+        for frame in range(opt_animation[0], opt_animation[1] + 1):
+            usd_vert_ap.Set(xsi_camera.Parameters("projplaneheight").GetValue(frame) * 25.4, Usd.TimeCode(frame))
+    else:
+        usd_vert_ap.Set(xsi_camera.Parameters("projplaneheight").Value * 25.4)
+
+    if utils.is_param_animated(xsi_camera.Parameters("projplaneoffx"), opt_animation):
+        for frame in range(opt_animation[0], opt_animation[1] + 1):
+            usd_hor_shift.Set(xsi_camera.Parameters("projplaneoffx").GetValue(frame) * 25.4, Usd.TimeCode(frame))
+    else:
+        usd_hor_shift.Set(xsi_camera.Parameters("projplaneoffx").Value * 25.4)
+
+    if utils.is_param_animated(xsi_camera.Parameters("projplaneoffy"), opt_animation):
+        for frame in range(opt_animation[0], opt_animation[1] + 1):
+            usd_ver_shift.Set(xsi_camera.Parameters("projplaneoffy").GetValue(frame) * 25.4, Usd.TimeCode(frame))
+    else:
+        usd_ver_shift.Set(xsi_camera.Parameters("projplaneoffy").Value * 25.4)
+
+
 def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
     imp.reload(utils)
     usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, xsi_camera, root_path)
@@ -53,14 +83,7 @@ def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
     xsi_vis_prop = xsi_camera.Properties("Visibility")
     usd_camera.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible if xsi_vis_prop.Parameters("viewvis").Value is False else UsdGeom.Tokens.inherited)
 
-    # aperture size, w = 1024 pixels
-    xsi_w = 1024
-    xsi_aspect = xsi_camera.Parameters("aspect").Value
-    usd_camera.CreateHorizontalApertureAttr().Set(xsi_w)
-    usd_camera.CreateVerticalApertureAttr().Set(xsi_w / xsi_aspect)
-    # offset is zero
-    usd_camera.CreateHorizontalApertureOffsetAttr().Set(0)
-    usd_camera.CreateVerticalApertureOffsetAttr().Set(0)
+    set_camera_aperture(xsi_camera, usd_camera, opt_animation)
 
     if opt_animation is None or not utils.is_focallength_animated(xsi_camera, opt_animation):
         set_camera_focallength(xsi_camera, usd_camera)
@@ -124,10 +147,48 @@ def import_define_camera(app, xsi_camera, xsi_interest, usd_camera, usd_tfm, up_
     usd_projection = usd_camera.GetProjectionAttr().Get()
     xsi_camera.Parameters("proj").Value = 0 if usd_projection == "orthographic" else 1
 
-    # aspect is not animated, so, use only the first value for ii
-    usd_horizontal = usd_camera.GetHorizontalApertureAttr().Get()
-    usd_vertical = usd_camera.GetVerticalApertureAttr().Get()
+    # aspect is not animated, so, use only the first value for it
+    usd_horizontal_attr = usd_camera.GetHorizontalApertureAttr()
+    usd_vertical_attr = usd_camera.GetVerticalApertureAttr()
+    usd_horizontal = usd_horizontal_attr.Get()
+    usd_vertical = usd_vertical_attr.Get()
     xsi_camera.Parameters("aspect").Value = float(usd_horizontal) / float(usd_vertical)
+
+    # set aperture attributes
+    xsi_camera.Parameters("projplane").Value = True
+    # horizontal aperture
+    horizontal_time = usd_horizontal_attr.GetTimeSamples()
+    if len(horizontal_time) > 1:
+        for frame in horizontal_time:
+            app.SaveKey(xsi_camera.Parameters("projplanewidth"), frame, usd_horizontal_attr.Get(frame) / 25.4)  # convert from millimeters to inches
+    else:
+        xsi_camera.Parameters("projplanewidth").Value = usd_horizontal_attr.Get() / 25.4
+
+    # vertical aperture
+    vertical_time = usd_vertical_attr.GetTimeSamples()
+    if len(vertical_time) > 1:
+        for frame in vertical_time:
+            app.SaveKey(xsi_camera.Parameters("projplaneheight"), frame, usd_vertical_attr.Get(frame) / 25.4)  # convert from millimeters to inches
+    else:
+        xsi_camera.Parameters("projplaneheight").Value = usd_vertical_attr.Get() / 25.4
+
+    # horizontal shift
+    hor_shift_attr = usd_camera.GetHorizontalApertureOffsetAttr()
+    hor_shift_time = hor_shift_attr.GetTimeSamples()
+    if len(hor_shift_time) > 1:
+        for frame in hor_shift_time:
+            app.SaveKey(xsi_camera.Parameters("projplaneoffx"), frame, hor_shift_attr.Get(frame) / 25.4)  # convert from millimeters to inches
+    else:
+        xsi_camera.Parameters("projplaneoffx").Value = hor_shift_attr.Get() / 25.4
+
+    # vertical shift
+    vert_shift_attr = usd_camera.GetVerticalApertureOffsetAttr()
+    vert_shift_time = vert_shift_attr.GetTimeSamples()
+    if len(vert_shift_time) > 1:
+        for frame in vert_shift_time:
+            app.SaveKey(xsi_camera.Parameters("projplaneoffy"), frame, vert_shift_attr.Get(frame) / 25.4)  # convert from millimeters to inches
+    else:
+        xsi_camera.Parameters("projplaneoffy").Value = vert_shift_attr.Get() / 25.4
 
     # finally set interest point from focus distance
     if xsi_interest is not None:
