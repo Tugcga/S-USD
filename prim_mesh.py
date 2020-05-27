@@ -2,6 +2,7 @@ from pxr import UsdGeom, Sdf, Usd, UsdShade
 from win32com.client import constants
 import prim_xform
 import utils
+import materials
 import imp
 
 # -------------------------------------------------------------
@@ -510,7 +511,7 @@ def read_weightmaps(usd_mesh):
 
 
 def read_clusters(usd_mesh):
-    '''return an array of pair [(name, [indices]), ...]
+    '''return an array of triplets [(name, [indices], usd_material), ...]
     '''
     to_return = []
     usd_prim = usd_mesh.GetPrim()
@@ -529,7 +530,8 @@ def read_clusters(usd_mesh):
                     elif attr.GetName() == "indices":
                         indices_attr = attr
             if element_type_attr is not None and indices_attr is not None and element_type_attr.Get() == "face":
-                to_return.append((child.GetName(), indices_attr.Get()))
+                usd_material = UsdShade.MaterialBindingAPI(child).GetDirectBinding().GetMaterial()
+                to_return.append((child.GetName(), indices_attr.Get(), usd_material))
 
     return to_return
 
@@ -700,7 +702,12 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
             # setup clusters only at once, when we create the topology
             if "cluster" in attrs:
                 for cluster_data in mesh_data["cluster"]:
-                    xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+                    xsi_cluster = xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+                    if mesh_options["assign_material"]:
+                        if cluster_data[2].GetPath() != "":
+                            xsi_material = materials.import_material(app, cluster_data[2], library_name=mesh_options["material_library"])
+                            # assign material to the cluster
+                            app.AssignMaterial(xsi_material.FullName + "," + xsi_cluster.FullName)
 
             if "normal" in attrs and normals_data is not None and len(normals_data) == 1:
                 normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
@@ -791,15 +798,20 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
     '''is_simple=True if Mesh component is not unique subcomponents of the XForm, in this case we should ignore in_mesh transform, because it already used by object transform
     '''
     imp.reload(utils)
+    imp.reload(materials)
     usd_mesh = UsdGeom.Mesh(usd_prim)
     xsi_mesh = app.GetPrim("EmptyPolygonMesh", mesh_name, xsi_parent)
+
+    app.DeselectAll()
+
+    if options.get("is_materials", False):
+        usd_material = UsdShade.MaterialBindingAPI(usd_prim).GetDirectBinding().GetMaterial()
+        xsi_material = materials.import_material(app, usd_material, library_name=options["file_name"])
+        if xsi_material is not None:
+            app.AssignMaterial(xsi_material.FullName + "," + xsi_mesh.FullName)
+
     utils.set_xsi_transform(app, xsi_mesh, usd_tfm, up_key=options["up_axis"])
     utils.set_xsi_visibility(xsi_mesh, visibility)
-
-    usd_mesh_material = UsdShade.MaterialBindingAPI(usd_prim).GetDirectBinding().GetMaterial()
-    # print(usd_mesh_material.GetPath() == "")  # false for non material
-    # print(usd_mesh_material.GetOutputs())
-    print(usd_mesh_material.GetPath())
 
     xsi_geometry = xsi_mesh.ActivePrimitive.Geometry
 
@@ -807,7 +819,9 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
     is_animated, is_topology_changed = utils.is_animated_mesh(usd_mesh, mesh_attributes)  # is_animated true if at least one of attributes has time changes
     mesh_options = {"attributes": mesh_attributes,
                     "up_axis": options["up_axis"],
-                    "ignore_inmesh_tfm": is_simple}
+                    "ignore_inmesh_tfm": is_simple,
+                    "assign_material": options.get("is_materials", False),
+                    "material_library": options["file_name"]}  # name of the library with imported materials
     if not is_animated:
         # simply apply geometry
         mesh_options["is_topology_change"] = False
@@ -822,6 +836,8 @@ def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent
         operator.Parameters("mesh_path").Value = str(usd_prim.GetPath())
         operator.Parameters("is_topology_change").Value = is_topology_changed
         operator.Parameters("ignore_inmesh_tfm").Value = is_simple
+        operator.Parameters("assign_material").Value = options.get("is_materials", False)
+        operator.Parameters("material_library").Value = options["file_name"]  # get as library the name of the imported file
         operator.Parameters("is_uvs").Value = "uvmap" in mesh_attributes
         operator.Parameters("is_normals").Value = "normal" in mesh_attributes
         operator.Parameters("is_color").Value = "color" in mesh_attributes

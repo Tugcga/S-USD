@@ -7,6 +7,7 @@ import prim_mesh
 import prim_pointcloud
 import prim_light
 import prim_camera
+import materials
 import imp
 
 
@@ -18,6 +19,7 @@ def import_usd(app, file_path, options, xsi_toolkit):
     imp.reload(prim_hair)
     imp.reload(prim_light)
     imp.reload(prim_camera)
+    imp.reload(materials)
 
     progress_bar = xsi_toolkit.ProgressBar
     progress_bar.Caption = ""
@@ -33,6 +35,10 @@ def import_usd(app, file_path, options, xsi_toolkit):
     cameras_to_remove = []
     if is_clear:
         progress_bar.Caption = "Clear the scene"
+        if options["is_materials"]:
+            # clear material library
+            materials.import_clear_library(app, options["file_name"])
+
         scene_root = app.ActiveProject2.ActiveScene.Root
         for child in scene_root.Children:
             if utils.is_contains_camera(child):

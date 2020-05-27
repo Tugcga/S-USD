@@ -60,3 +60,29 @@ def export_materials(app, params, stage, materials_path, progress_bar=None):
     mat_stage.Save()
 
     return materials_path
+
+
+# --------------------------------------------------------------
+# ------------------------Import--------------------------------
+def import_clear_library(app, lib_name):
+    lib = utils.get_library(app, lib_name, create=False)
+    if lib is not None:
+        app.DeleteObj(lib)
+
+
+def import_material(app, usd_material, library_name=None):
+    '''it return xsi_material, created if needed for usd_material
+    '''
+    imp.reload(utils)
+    if usd_material.GetPath() == "":
+        return None
+    else:
+        usd_path = usd_material.GetPath()
+        library = utils.get_library(app, library_name)
+        material_name = utils.get_last_hierarchy(str(usd_path))
+        xsi_material = utils.find_material_in_library(library, material_name)
+        if xsi_material is not None:
+            return xsi_material
+        else:
+            xsi_material = app.SICreateMaterial("$XSI_DSPRESETS\\Shaders\\Material\\Phong", material_name, library)  # create default material
+            return xsi_material

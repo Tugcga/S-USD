@@ -43,6 +43,7 @@ def USDMeshOperator_Define(in_ctxt):
     operator.AddParameter(xsi_factory.CreateParamDef("file_path", constants.siString, constants.siClassifUnknown, constants.siReadOnly, "file_path", "", ""))
     operator.AddParameter(xsi_factory.CreateParamDef("mesh_path", constants.siString, constants.siClassifUnknown, constants.siReadOnly, "mesh_path", "", ""))
     operator.AddParameter(xsi_factory.CreateParamDef("up_axis", constants.siString, constants.siClassifUnknown, constants.siReadOnly, "up_axis", "", ""))
+    operator.AddParameter(xsi_factory.CreateParamDef("material_library", constants.siString, constants.siClassifUnknown, constants.siReadOnly, "material_library", "", ""))
     operator.AddParameter(xsi_factory.CreateParamDef2("active", constants.siBool, True))
     operator.AddParameter(xsi_factory.CreateParamDef("frame_offset", constants.siInt4, constants.siClassifUnknown, constants.siPersistable + constants.siAnimatable, "frame_offset", "", 0, -2147483648, 2147483647, 0, 16))
     operator.AddParameter(xsi_factory.CreateParamDef2("is_uvs", constants.siBool, True))
@@ -54,6 +55,8 @@ def USDMeshOperator_Define(in_ctxt):
     operator.AddParameter(xsi_factory.CreateParamDef2("is_edges_creases", constants.siBool, True))
     operator.AddParameter(xsi_factory.CreateParamDef2("is_topology_change", constants.siBool, False))
     operator.AddParameter(xsi_factory.CreateParamDef2("ignore_inmesh_tfm", constants.siBool, False))
+    operator.AddParameter(xsi_factory.CreateParamDef2("assign_material", constants.siBool, True))
+
     return True
 
 
@@ -93,6 +96,8 @@ def USDMeshOperator_Update(in_ctxt):
 
     is_topology_change = in_ctxt.GetParameterValue("is_topology_change")
     ignore_inmesh_tfm = in_ctxt.GetParameterValue("ignore_inmesh_tfm")
+    assign_material = in_ctxt.GetParameterValue("assign_material")
+    material_library = in_ctxt.GetParameterValue("material_library")
 
     attributes_list = []
     if is_uvs:
@@ -112,7 +117,9 @@ def USDMeshOperator_Update(in_ctxt):
     mesh_options = {"attributes": attributes_list,
                     "up_axis": up_axis,
                     "ignore_inmesh_tfm": ignore_inmesh_tfm,
-                    "is_topology_change": is_topology_change}
+                    "is_topology_change": is_topology_change,
+                    "assign_material": assign_material,
+                    "material_library": material_library}
 
     if is_active:
         xsi_geometry = in_ctxt.OutputTarget.Geometry

@@ -487,6 +487,24 @@ def usd_to_xsi_faces_array(face_indexes, face_sizes, up_axis):
     return polygons
 
 
+def get_library(app, lib_name, create=True):
+    for lib in app.ActiveProject.ActiveScene.MaterialLibraries:
+        if lib.Name == lib_name:
+            return lib
+    if create:
+        lib = app.CreateLibrary(lib_name)[0]
+        return lib
+    else:
+        return None
+
+
+def find_material_in_library(library, mat_name):
+    for mat in library.Items:
+        if mat.Name == mat_name:
+            return mat
+    return None
+
+
 # --------------------General----------------------------
 def from_scene_path_to_models_path(path):
     path_head, path_tail = os.path.split(path)
@@ -500,6 +518,13 @@ def from_scene_path_to_models_path(path):
     to_return = models_path + file_name
     print("[USD export]: Save to " + to_return)
     return to_return
+
+
+def get_last_hierarchy(path):
+    ''' from /a/b/c/d return d
+    '''
+    parts = path.split("/")
+    return parts[-1]
 
 
 def get_last_folder(path):
