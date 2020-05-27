@@ -141,7 +141,7 @@ def import_define_camera(app, xsi_camera, xsi_interest, usd_camera, usd_tfm, up_
                 import_set_interest_at_frame(app, xsi_camera, xsi_interest, usd_focus.Get(frame), usd_tfm[0][frame_index if frame_index > -1 else 0], up_key, frame=frame)
 
 
-def emit_camera(app, options, camera_name, usd_tfm, visibility, usd_prim, xsi_parent):
+def emit_camera(app, options, camera_name, usd_tfm, visibility, usd_prim, xsi_parent, is_simple=False):
     # save old childrens
     children_ids = []
     for child in xsi_parent.Children:
@@ -156,7 +156,7 @@ def emit_camera(app, options, camera_name, usd_tfm, visibility, usd_prim, xsi_pa
             xsi_interest = ch
 
     usd_camera = UsdGeom.Camera(usd_prim)
-    utils.set_xsi_transform(app, xsi_camera, usd_tfm, up_key=options["up_axis"])
+    utils.set_xsi_transform(app, xsi_camera, usd_tfm, up_key=options["up_axis"], add_tfm=usd_camera.GetLocalTransformation())
     utils.set_xsi_visibility(xsi_camera, visibility)
     if xsi_interest is not None:
         utils.set_xsi_visibility(xsi_interest, visibility)

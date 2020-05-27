@@ -391,16 +391,16 @@ def set_xsi_transform_at_frame(app, xsi_object, usd_tfm, up_key, frame=None):
         app.SaveKey(xsi_object.Name + ".kine.local.sclz", frame, xsi_scale.Z)
 
 
-def set_xsi_transform(app, xsi_obj, usd_tfm, up_key="Y"):
+def set_xsi_transform(app, xsi_obj, usd_tfm, up_key="Y", add_tfm=None):
     tfm_data = usd_tfm[0]
     time_samples = usd_tfm[1]
     if len(time_samples) == 0:
         # no animation
-        set_xsi_transform_at_frame(app, xsi_obj, tfm_data, up_key)
+        set_xsi_transform_at_frame(app, xsi_obj, tfm_data if add_tfm is None else add_tfm * tfm_data, up_key)
     else:
         for i in range(len(time_samples)):
             frame = time_samples[i]
-            set_xsi_transform_at_frame(app, xsi_obj, tfm_data[i], up_key, frame=frame)
+            set_xsi_transform_at_frame(app, xsi_obj, tfm_data[i] if add_tfm is None else add_tfm * tfm_data, up_key, frame=frame)
 
 
 def set_xsi_visibility(xsi_obj, is_visible):
@@ -690,11 +690,27 @@ def get_normalized(vector):
     return (vector[0] / l, vector[1] / l, vector[2] / l)
 
 
-def vector_mult_to_matrix(vector, matrix):
+def vector_mult_to_matrix(vector, matrix, remove_translation=False):
+    '''if remove_translation is True, then in the matrix hte last row will be (0, 0, 0, 1)
+    '''
     to_return = []
     for i in range(3):
         s = 0
         for j in range(4):
-            s += (vector[j] if j < 3 else 1) * matrix[j][i]
+            s += (vector[j] if j < 3 else 1) * (matrix[j][i] if j < 3 or remove_translation is False else 0)
         to_return.append(s)
+    return to_return
+
+
+def multiply_matrices(a, b):
+    '''a and b are matrices 4x4
+    return a * b
+    '''
+    to_return = [[0, 0, 0, 0] for i in range(4)]
+    for i in range(4):
+        for j in range(4):
+            s = 0
+            for k in range(4):
+                s += a[i][k] * b[k][j]
+            to_return[i][j] = s
     return to_return

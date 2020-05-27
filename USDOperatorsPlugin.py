@@ -53,6 +53,7 @@ def USDMeshOperator_Define(in_ctxt):
     operator.AddParameter(xsi_factory.CreateParamDef2("is_vertex_creases", constants.siBool, True))
     operator.AddParameter(xsi_factory.CreateParamDef2("is_edges_creases", constants.siBool, True))
     operator.AddParameter(xsi_factory.CreateParamDef2("is_topology_change", constants.siBool, False))
+    operator.AddParameter(xsi_factory.CreateParamDef2("ignore_inmesh_tfm", constants.siBool, False))
     return True
 
 
@@ -91,6 +92,7 @@ def USDMeshOperator_Update(in_ctxt):
     is_edges_creases = in_ctxt.GetParameterValue("is_edges_creases")
 
     is_topology_change = in_ctxt.GetParameterValue("is_topology_change")
+    ignore_inmesh_tfm = in_ctxt.GetParameterValue("ignore_inmesh_tfm")
 
     attributes_list = []
     if is_uvs:
@@ -108,8 +110,9 @@ def USDMeshOperator_Update(in_ctxt):
     if is_edges_creases:
         attributes_list.append("edge_creases")
     mesh_options = {"attributes": attributes_list,
-                    "up_axis": up_axis}
-    mesh_options["is_topology_change"] = is_topology_change
+                    "up_axis": up_axis,
+                    "ignore_inmesh_tfm": ignore_inmesh_tfm,
+                    "is_topology_change": is_topology_change}
 
     if is_active:
         xsi_geometry = in_ctxt.OutputTarget.Geometry
@@ -142,6 +145,7 @@ def USDMeshOperator_BuildUI(layout=None):
     layout.AddGroup("Options")
     layout.AddItem("active", "Active")
     layout.AddItem("up_axis", "Up Axis")
+    layout.AddItem("ignore_inmesh_tfm", "Ignore In-Mesh Transform")
     layout.AddItem("frame_offset", "Frame Offset")
     layout.EndGroup()
 

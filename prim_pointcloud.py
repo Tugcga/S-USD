@@ -107,7 +107,7 @@ def write_ice_cache_at_frame(folder_path, object_name, raw_points, width_data, s
     ic.write(folder_path + object_name + ("_" + str(frame) if frame is not None else "") + ".icecache")
 
 
-def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_name, up_key):
+def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_name, up_key, ignore_tfm):
     folder_path = project_path + "\\Simulation\\usd_cache\\" + file_name + "\\"
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
@@ -129,7 +129,10 @@ def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_n
     segments_data = None
 
     if is_constant_points:
-        raw_positions = usd_points.Get() if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get()]
+        in_tfm = usd_pointcloud.GetLocalTransformation()
+        tfm_positions = usd_points.Get() if ignore_tfm else [utils.vector_mult_to_matrix(p, in_tfm) for p in usd_points.Get()]
+        # raw_positions = usd_points.Get() if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get()]
+        raw_positions = tfm_positions if up_key is "Y" else [[p[0], p[2], p[1]] for p in tfm_positions]
         if is_strands:
             if is_constant_segments:
                 segments_data = usd_segments.Get()
@@ -142,7 +145,10 @@ def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_n
         write_ice_cache_at_frame(folder_path, xsi_object.Name, raw_positions, width_data, segments_data)
     else:
         for frame in point_times:
-            raw_positions = usd_points.Get(frame) if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get(frame)]
+            in_tfm = usd_pointcloud.GetLocalTransformation(frame)
+            tfm_positions = usd_points.Get(frame) if ignore_tfm else [utils.vector_mult_to_matrix(p, in_tfm) for p in usd_points.Get(frame)]
+            # raw_positions = usd_points.Get(frame) if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get(frame)]
+            raw_positions = tfm_positions if up_key is "Y" else [[p[0], p[2], p[1]] for p in tfm_positions]
             if is_strands:
                 if is_constant_segments:
                     segments_data = usd_segments.Get()
@@ -172,14 +178,16 @@ def build_ice_tree(app, xsi_points, is_constant, file_name):
     app.ConnectICENodes(tree.FullName + ".port1", node.FullName + ".execute")
 
 
-def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim, is_strands, xsi_parent):
+def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim, is_strands, xsi_parent, is_simple=False):
+    '''if is_simple is True, then we should ignore in-object ransform
+    '''
     imp.reload(utils)
     usd_object = UsdGeom.BasisCurves(usd_prim) if is_strands else UsdGeom.Points(usd_prim)
     xsi_points = app.GetPrim("PointCloud", pointloud_name, xsi_parent)
     utils.set_xsi_transform(app, xsi_points, usd_tfm, up_key=options["up_axis"])
     utils.set_xsi_visibility(xsi_points, visibility)
     if "project_path" in options:
-        is_constant = write_ice_cache(usd_object, is_strands, xsi_points, options["project_path"], options["file_name"], options["up_axis"])
+        is_constant = write_ice_cache(usd_object, is_strands, xsi_points, options["project_path"], options["file_name"], options["up_axis"], is_simple)
         # build ice-tree with caching node
         build_ice_tree(app, xsi_points, is_constant, options["file_name"])
 

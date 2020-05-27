@@ -106,15 +106,15 @@ def emit_item(app, options, usd_item, xsi_parent, progress_bar, predefined_name=
     if item_type == "Xform" and constants.siNullPrimType in options["object_types"]:
         new_object = prim_xform.emit_null(app, xform_name, usd_tfm, is_visible, usd_item, xsi_parent, options["up_axis"])
     elif item_type == "Mesh" and constants.siPolyMeshType in options["object_types"]:
-        new_object = prim_mesh.emit_mesh(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
+        new_object = prim_mesh.emit_mesh(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent, is_simple=predefined_name is None)
     elif item_type == "Points" and "pointcloud" in options["object_types"]:
-        new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, False, xsi_parent)
+        new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, False, xsi_parent, is_simple=predefined_name is None)
     elif item_type == "BasisCurves" and "strands" in options["object_types"]:
-        new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, True, xsi_parent)
+        new_object = prim_pointcloud.emit_pointcloud(app, options, xform_name, usd_tfm, is_visible, usd_item, True, xsi_parent, is_simple=predefined_name is None)
     elif item_type in ["SphereLight", "DistantLight", "LightPortal", "RectLight", "DiskLight", "DomeLight", "CylinderLight"] and constants.siLightPrimType in options["object_types"]:
-        new_object = prim_light.emit_light(app, options, xform_name, usd_tfm, is_visible, usd_item, item_type, xsi_parent)
+        new_object = prim_light.emit_light(app, options, xform_name, usd_tfm, is_visible, usd_item, item_type, xsi_parent, is_simple=predefined_name is None)
     elif item_type == "Camera" and constants.siCameraPrimType in options["object_types"]:
-        new_object = prim_camera.emit_camera(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent)
+        new_object = prim_camera.emit_camera(app, options, xform_name, usd_tfm, is_visible, usd_item, xsi_parent, is_simple=predefined_name is None)
         if new_object is not None:
             options["import_camera"] = True
 
