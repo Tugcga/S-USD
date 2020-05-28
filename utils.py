@@ -493,15 +493,8 @@ def usd_to_xsi_faces_array(face_indexes, face_sizes, up_axis):
     index = 0
     for f in face_sizes:
         polygons.append(f)
-        start_polygon_index = index  # index of the first point in the polygon
         for i in range(f):
-            if True or up_axis == "Y":
-                polygons.append(face_indexes[index])
-            else:  # invert the polygon
-                if i == 0:  # the first point is the same
-                    polygons.append(face_indexes[index])
-                else:  # all other point shoyld be done from the end
-                    polygons.append(face_indexes[start_polygon_index + f - i])
+            polygons.append(face_indexes[index])
             index += 1
     return polygons
 
@@ -623,7 +616,7 @@ def verify_extension(app, file_path):
         return file_path + ".usda"
     else:
         file_ext = path_tail[point_index + 1:]
-        if file_ext in ["usd", "usda", "usdz"]:
+        if file_ext in ["usd", "usda", "usdz", "usdc"]:
             return file_path
         else:
             print("[USD export]: change extension of the output file to *.usda")

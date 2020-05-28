@@ -17,7 +17,10 @@ def set_mesh_at_frame(app, stage, mesh_object, opt_attributes, usd_mesh, usd_mes
         app.SetValue("PlayControl.Key", frame, "")
     # read mesh data
     xsi_polygonmesh = mesh_object.GetActivePrimitive3().Geometry if frame is None else mesh_object.GetActivePrimitive3(frame).GetGeometry3(frame)
-    xsi_mesh_data = xsi_polygonmesh.Get2()
+    if xsi_polygonmesh.Vertices.Count == 0:
+        xsi_mesh_data = (((0,), (0,), (0,)), (0,))
+    else:
+        xsi_mesh_data = xsi_polygonmesh.Get2()
     # 1: ((p1.x, p2.x, ...), (p1.y, p2.y, ...), (p1.z, p2.z, ...))
     # 2: (4<-polygon size, 0, 1, 5, 6, 4<-second polygon size, 45, 64, 34, 22, ...)
     xsi_point_positions = []
@@ -770,87 +773,89 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         face_size = utils.get_closest_data(face_size_data, frame)
         face_indexes = utils.get_closest_data(face_indexes_data, frame)
 
-        xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size, mesh_options["up_axis"]))
-        if mesh_options["up_axis"] is "Z":
-            app.ApplyTopoOp("InvertPolygon", xsi_geometry.Parent.Parent.Name, constants.siUnspecified, constants.siPersistentOperation)
+        if len(face_indexes) > 0 and len(face_size) > 0:  # create mesh only if it exists
+            xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size, mesh_options["up_axis"]))
 
-        # sset attributes only for non-changed topology
-        if not is_topology_change:
-            # setup clusters only at once, when we create the topology
-            if "cluster" in attrs:
-                for cluster_data in mesh_data["cluster"]:
-                    xsi_cluster = xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
-                    if mesh_options["assign_material"]:
-                        if cluster_data[2].GetPath() != "":
-                            xsi_material = materials.import_material(app, cluster_data[2], library_name=mesh_options["material_library"])
-                            # assign material to the cluster
-                            app.AssignMaterial(xsi_material.FullName + "," + xsi_cluster.FullName)
+            if mesh_options["up_axis"] is "Z":
+                app.ApplyTopoOp("InvertPolygon", xsi_geometry.Parent.Parent.Name, constants.siUnspecified, constants.siPersistentOperation)
 
-            if "normal" in attrs and normals_data is not None and len(normals_data) == 1:
-                normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
-                import_setup_normals(app, normals, normals_interpolation, xsi_geometry, is_topology_change)
+            # sset attributes only for non-changed topology
+            if not is_topology_change:
+                # setup clusters only at once, when we create the topology
+                if "cluster" in attrs:
+                    for cluster_data in mesh_data["cluster"]:
+                        xsi_cluster = xsi_geometry.AddCluster(constants.siPolygonCluster, cluster_data[0], cluster_data[1])
+                        if mesh_options["assign_material"]:
+                            if cluster_data[2].GetPath() != "":
+                                xsi_material = materials.import_material(app, cluster_data[2], library_name=mesh_options["material_library"])
+                                # assign material to the cluster
+                                app.AssignMaterial(xsi_material.FullName + "," + xsi_cluster.FullName)
 
-            if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
-                import_setup_uvs(app, xsi_geometry, uvs_data, False, is_topology_change)
+                if "normal" in attrs and normals_data is not None and len(normals_data) == 1:
+                    normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
+                    import_setup_normals(app, normals, normals_interpolation, xsi_geometry, is_topology_change)
 
-            if "color" in attrs and colors_data is not None and len(colors_data) > 0:
-                import_set_colors(app, xsi_geometry, colors_data, False, is_topology_change)
+                if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
+                    import_setup_uvs(app, xsi_geometry, uvs_data, False, is_topology_change)
 
-            if "weightmap" in attrs and weightmaps_data is not None and len(weightmaps_data) > 0:
-                import_set_weightmaps(app, xsi_geometry, weightmaps_data, False, is_topology_change)
+                if "color" in attrs and colors_data is not None and len(colors_data) > 0:
+                    import_set_colors(app, xsi_geometry, colors_data, False, is_topology_change)
 
-            # creases import only at one frame, because at other frames it creates too many crese operator
-            vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
-            if "vertex_creases" in attrs and vertex_creases_data is not None and len(vertex_creases_data) > 0:
-                vertex_creases = utils.get_closest_data(vertex_creases_data, 0 if frame is None else frame)  # array of the pairs (index, value)
-                vertices = xsi_geometry.Vertices
-                name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".pnt"
-                creases_dict = {}
-                for vert in vertices:
-                    data_index = utils.get_index_in_array_for_value(vertex_creases, vert.Index)
-                    if data_index is not None:
-                        crease_value = vertex_creases[data_index][1]
-                        is_find = False
-                        for crease_key in creases_dict.keys():
-                            if abs(crease_key - crease_value) < 0.01:
-                                is_find = True
-                                creases_dict[crease_key].append(vert.Index)
-                        if not is_find:
-                            creases_dict[crease_value] = [vert.Index]
-                for crease_key in creases_dict.keys():
-                    a = creases_dict[crease_key]
-                    if len(a) > 0:
-                        op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(a), 3, constants.siPersistentOperation)
-                        op[0].Parameters("CreaseValue").Value = crease_key
+                if "weightmap" in attrs and weightmaps_data is not None and len(weightmaps_data) > 0:
+                    import_set_weightmaps(app, xsi_geometry, weightmaps_data, False, is_topology_change)
 
-            edge_creases_data = utils.get_in_dict(mesh_data, "edge_creases")
-            if "edge_creases" in attrs and edge_creases_data is not None and len(edge_creases_data) > 0:
-                edges_creases = utils.get_closest_data(edge_creases_data, 0 if frame is None else frame)  # array of triplets [(s, e, value), ...]
-                mesh_edges = xsi_geometry.Edges
-                name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".edge"
-                # set crease value to each edge separatly
-                creases_dict = {}  # store edge indexes for different values (epsilon = 0.001)
-                for edge in mesh_edges:
-                    edge_verts = edge.Vertices
-                    v0 = edge_verts[0].Index
-                    v1 = edge_verts[1].Index
-                    data_index = utils.get_index_in_array_for_pair(edges_creases, v0, v1)
-                    if data_index is not None:
-                        crease_value = edges_creases[data_index][2]
-                        # find in the dict
-                        is_find = False
-                        for crease_key in creases_dict.keys():
-                            if abs(crease_key - crease_value) < 0.01:
-                                is_find = True
-                                creases_dict[crease_key].append(edge.Index)
-                        if not is_find:
-                            creases_dict[crease_value] = [edge.Index]
-                # apply crease operator for each array in the dict
-                for crease_key in creases_dict.keys():
-                    a = creases_dict[crease_key]
-                    if len(a) > 0:
-                        op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(creases_dict[crease_key]), 3, constants.siPersistentOperation)
-                        op[0].Parameters("CreaseValue").Value = crease_key
+                # creases import only at one frame, because at other frames it creates too many crese operator
+                vertex_creases_data = utils.get_in_dict(mesh_data, "vertex_creases")
+                if "vertex_creases" in attrs and vertex_creases_data is not None and len(vertex_creases_data) > 0:
+                    vertex_creases = utils.get_closest_data(vertex_creases_data, 0 if frame is None else frame)  # array of the pairs (index, value)
+                    vertices = xsi_geometry.Vertices
+                    name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".pnt"
+                    creases_dict = {}
+                    for vert in vertices:
+                        data_index = utils.get_index_in_array_for_value(vertex_creases, vert.Index)
+                        if data_index is not None:
+                            crease_value = vertex_creases[data_index][1]
+                            is_find = False
+                            for crease_key in creases_dict.keys():
+                                if abs(crease_key - crease_value) < 0.01:
+                                    is_find = True
+                                    creases_dict[crease_key].append(vert.Index)
+                            if not is_find:
+                                creases_dict[crease_value] = [vert.Index]
+                    for crease_key in creases_dict.keys():
+                        a = creases_dict[crease_key]
+                        if len(a) > 0:
+                            op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(a), 3, constants.siPersistentOperation)
+                            op[0].Parameters("CreaseValue").Value = crease_key
+
+                edge_creases_data = utils.get_in_dict(mesh_data, "edge_creases")
+                if "edge_creases" in attrs and edge_creases_data is not None and len(edge_creases_data) > 0:
+                    edges_creases = utils.get_closest_data(edge_creases_data, 0 if frame is None else frame)  # array of triplets [(s, e, value), ...]
+                    mesh_edges = xsi_geometry.Edges
+                    name_prefix = utils.remove_last_part(xsi_geometry.Parent.FullName) + ".edge"
+                    # set crease value to each edge separatly
+                    creases_dict = {}  # store edge indexes for different values (epsilon = 0.001)
+                    for edge in mesh_edges:
+                        edge_verts = edge.Vertices
+                        v0 = edge_verts[0].Index
+                        v1 = edge_verts[1].Index
+                        data_index = utils.get_index_in_array_for_pair(edges_creases, v0, v1)
+                        if data_index is not None:
+                            crease_value = edges_creases[data_index][2]
+                            # find in the dict
+                            is_find = False
+                            for crease_key in creases_dict.keys():
+                                if abs(crease_key - crease_value) < 0.01:
+                                    is_find = True
+                                    creases_dict[crease_key].append(edge.Index)
+                            if not is_find:
+                                creases_dict[crease_value] = [edge.Index]
+                    # apply crease operator for each array in the dict
+                    for crease_key in creases_dict.keys():
+                        a = creases_dict[crease_key]
+                        if len(a) > 0:
+                            op = app.ApplyOp("SetEdgeCreaseValueOp", name_prefix + str(creases_dict[crease_key]), 3, constants.siPersistentOperation)
+                            op[0].Parameters("CreaseValue").Value = crease_key
     else:
         # set only point positions
         xsi_geometry.Vertices.PositionArray = xsi_points_postions
