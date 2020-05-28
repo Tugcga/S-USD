@@ -436,17 +436,18 @@ def read_normals(usd_mesh, up_axis, ignore_tfm):
                 vals_at_frame_tfm = [n if ignore_tfm else utils.vector_mult_to_matrix(n, in_mesh_tfm, remove_translation=True) for n in vals_at_frame]
                 to_return.append((frame, vals_at_frame_tfm if up_axis == "Y" else [(n[0], n[2], n[1]) for n in vals_at_frame_tfm]))
 
-    return to_return
+    return to_return, usd_mesh.GetNormalsInterpolation()
 
 
 def read_uvs(usd_mesh):
-    '''store uvs in array [uv1, uv2, ...], where each uv is a pair (name, array [(frame1, data1), (frame2, data2), ...])
+    '''store uvs in array [uv1, uv2, ...], where each uv is a triple (name, interpolation, array [(frame1, data1), (frame2, data2), ...])
     '''
     primvars = usd_mesh.GetPrimvars()
     to_return = []
     for p in primvars:
         type_strings = p.GetTypeName().aliasesAsStrings
-        if "texCoord2f[]" in type_strings:
+        interpolation = p.GetInterpolation()
+        if ("texCoord2f[]" in type_strings or "float2[]" in type_strings) and (interpolation == "faceVarying" or interpolation == "vertex"):
             # this is uv primvar
             uv_data = []
             uv_name = p.GetBaseName()
@@ -458,7 +459,10 @@ def read_uvs(usd_mesh):
             else:
                 for frame in uv_time:
                     uv_data.append((frame, uv_attribute.Get(frame)))
-            to_return.append((uv_name, uv_data))
+            indexes = None
+            if p.IsIndexed():
+                indexes = p.GetIndices()
+            to_return.append((uv_name, interpolation, indexes, uv_data))
 
     return to_return
 
@@ -469,7 +473,7 @@ def read_vertex_colors(usd_mesh):
     for p in primvars:
         type_strings = p.GetTypeName().aliasesAsStrings
         interpolation = p.GetInterpolation()
-        if "color3f[]" in type_strings and interpolation == "faceVarying":
+        if "color3f[]" in type_strings and (interpolation == "faceVarying" or interpolation == "vertex"):
             # vertex colors are only face-varuing
             color_data = []
             color_name = p.GetBaseName()
@@ -481,13 +485,16 @@ def read_vertex_colors(usd_mesh):
             else:
                 for frame in color_time:
                     color_data.append((frame, color_attribute.Get(frame)))
-            to_return.append((color_name, color_data))
+            indices = None
+            if p.IsIndexed():
+                indices = p.GetIndices()
+            to_return.append((color_name, interpolation, indices, color_data))
 
     return to_return
 
 
 def read_weightmaps(usd_mesh):
-    '''result is array [(name, weightmap), ...], each weightmap is an array [(frame1, data1), ...]
+    '''result is array [(name, interpolation, indices, weightmap), ...], each weightmap is an array [(frame1, data1), ...]
     '''
     primvars = usd_mesh.GetPrimvars()
     to_return = []
@@ -506,7 +513,10 @@ def read_weightmaps(usd_mesh):
             else:
                 for frame in weight_time:
                     weight_data.append((frame, weight_attr.Get(frame)))
-            to_return.append((weight_name, weight_data))
+            indices = None
+            if p.IsIndexed():
+                indices = p.GetIndices()
+            to_return.append((weight_name, interpolation, indices, weight_data))
     return to_return
 
 
@@ -537,7 +547,6 @@ def read_clusters(usd_mesh):
 
 
 def read_mesh_data(mesh_options, data_dict, file_path=None, mesh_path=None, usd_mesh=None):
-    # mesh_options = {"attributes": ('uvmap', 'normal', 'color', 'weightmap', 'cluster', 'vertex_creases', 'edge_creases')}
     if usd_mesh is not None or (file_path is not None and mesh_path is not None):
         if usd_mesh is None:
             stage = Usd.Stage.Open(file_path)
@@ -550,7 +559,7 @@ def read_mesh_data(mesh_options, data_dict, file_path=None, mesh_path=None, usd_
         data_dict["face_indexes"] = read_face_indexes(usd_mesh)
         attrs = mesh_options.get("attributes", [])
         if "normal" in attrs:
-            data_dict["normals"] = read_normals(usd_mesh, mesh_options["up_axis"], mesh_options["ignore_inmesh_tfm"])
+            data_dict["normals"], data_dict["normals_interpolation"] = read_normals(usd_mesh, mesh_options["up_axis"], mesh_options["ignore_inmesh_tfm"])
         if "uvmap" in attrs:
             data_dict["uvs"] = read_uvs(usd_mesh)
         if "color" in attrs:
@@ -599,8 +608,31 @@ def setup_weights_cluster(app, xsi_geometry):
     return weight_cls
 
 
-def import_setup_normals(app, normals, xsi_geometry, is_topology_change):
-    if normals is not None and len(normals) > 0:
+def import_set_samples_from_vertices(xsi_property, xsi_geometry, data):
+    data_size = len(data[0])
+    xsi_data = [tuple(0 for k in range(data_size)) for i in range(xsi_property.Elements.Count)]  # reserve the array
+    for v in xsi_geometry.Vertices:
+        for n in v.Nodes:
+            xsi_data[n.Index] = data[v.Index]
+    if data_size == 3:
+        xsi_data = utils.transpose_vectors_array(xsi_data)  # transpose array
+        # set values to cluster
+        xsi_property.Elements.Array = ([tuple(xsi_data[0]), tuple(xsi_data[1]), tuple(xsi_data[2])])
+    elif data_size == 2:
+        xsi_data = utils.transpose_2vectors_array(xsi_data)
+        xsi_property.Elements.Array = ([tuple(xsi_data[0]), tuple(xsi_data[1])])
+
+
+def import_apply_indices_to_data(data, indexes):
+    if indexes is None or len(indexes) == 0:
+        return data
+    else:
+        return [data[i] for i in indexes]
+
+
+def import_setup_normals(app, normals, normals_interpolation, xsi_geometry, is_topology_change):
+    # normals can be either "faceVarying" or "vertex"
+    if normals is not None and len(normals) > 0 and normals_interpolation in ["faceVarying", "vertex"]:
         normals_cls = setup_normals_cluster(app, xsi_geometry)
         normal_name = "User_Normal_Property"
         # try to find normals property
@@ -609,65 +641,85 @@ def import_setup_normals(app, normals, xsi_geometry, is_topology_change):
         if normals_prop is None:
             new_normals_prop = app.AddProp("User Normal Property", normals_cls.FullName, constants.siDefaultPropagation, normal_name)
             normals_prop = new_normals_prop[1][0]
-        if normals_prop.Elements.Count == len(normals):
+        if normals_interpolation == "faceVarying":
             xsi_normals = utils.transpose_vectors_array(normals)
             normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
-        elif xsi_geometry.Vertices.Count == len(normals):
-            # in this case normals data are per-vertex, not per-sample, so, we should convert it
-            xsi_normals = [(0, 0, 0) for i in range(normals_prop.Elements.Count)]  # reserve the array
-            for v in xsi_geometry.Vertices:
-                for n in v.Nodes:
-                    xsi_normals[n.Index] = normals[v.Index]
-            xsi_normals = utils.transpose_vectors_array(xsi_normals)  # transpose array
-            # set values to cluster
-            normals_prop.Elements.Array = ([tuple(xsi_normals[0]), tuple(xsi_normals[1]), tuple(xsi_normals[2])])
+        elif normals_interpolation == "vertex":
+            import_set_samples_from_vertices(normals_prop, xsi_geometry, normals)
 
 
 def import_setup_uvs(app, xsi_geometry, uvs_data, is_dynamic, is_topology_change, frame=None):
+    '''uv_data contains the tuples of 4 elements
+    0 - name
+    1 - interpolation (vertex of faceVatying)
+    2 - indices
+    3 - array of the form [(frame, data-in-frame), ...]
+    '''
     uvs_cls = setup_uvs_cluster(app, xsi_geometry)
     for uv_data in uvs_data:
-        if (is_dynamic and len(uv_data[1]) > 1) or (not is_dynamic and len(uv_data[1]) == 1):
+        if (is_dynamic and len(uv_data[3]) > 1) or (not is_dynamic and len(uv_data[3]) == 1):
             uv_name = uv_data[0]
-            uv_coordinates = utils.get_closest_data(uv_data[1], 0 if frame is None else frame)
+            uv_interpolation = uv_data[1]
+            uv_coordinates = utils.get_closest_data(uv_data[3], 0 if frame is None else frame)
+            uv_coordinates = import_apply_indices_to_data(uv_coordinates, uv_data[2])
             find_path = xsi_geometry.Parent.FullName + ".cls." + "UVCoordinates." + uv_name
             uv_prop = app.Dictionary.GetObject(find_path, False)
             if uv_prop is None:
                 new_uv_prop = app.AddProp("Texture Projection", uvs_cls.FullName, constants.siDefaultPropagation, uv_name)
                 uv_prop = new_uv_prop[1][0]
-            uv_array = utils.transpose_2vectors_array(uv_coordinates)
-            if len(uv_prop.Elements.Array[0]) > 0:  # sometimes  this array is not inicialidex and equal ((), (), ())
-                uv_prop.Elements.Array = tuple([tuple(uv_array[0]), tuple(uv_array[1]), tuple([0]*len(uv_array[0]))])
+            if uv_interpolation == "faceVarying":
+                uv_array = utils.transpose_2vectors_array(uv_coordinates)
+                if len(uv_prop.Elements.Array[0]) > 0:  # sometimes  this array is not inicialidex and equal ((), (), ())
+                    uv_prop.Elements.Array = tuple([tuple(uv_array[0]), tuple(uv_array[1]), tuple([0]*len(uv_array[0]))])
+            elif uv_interpolation == "vertex":
+                import_set_samples_from_vertices(uv_prop, xsi_geometry, uv_coordinates)
 
 
 def import_set_colors(app, xsi_geometry, colors_data, is_dynamic, is_topology_change, frame=None):
     colors_cls = setup_colors_cluster(app, xsi_geometry)
     for color_data in colors_data:
-        if (is_dynamic and len(color_data[1]) > 1) or (not is_dynamic and len(color_data[1]) == 1):
+        # each color_data is a tuple of four elements:
+        # 0 - name
+        # 1 - interpolation (str), for example vertex or faceVarying
+        # 2 - None if there are no indexes or array of indexes, length of indexes depends on interpolation (= samples count for faceVarying)
+        # 3 - actual data, array of pairs (frame, data in frame)
+        if (is_dynamic and len(color_data[3]) > 1) or (not is_dynamic and len(color_data[3]) == 1):
             color_name = color_data[0]
-            colors = utils.get_closest_data(color_data[1], 0 if frame is None else frame)
+            color_interpolation = color_data[1]
+            colors = utils.get_closest_data(color_data[3], 0 if frame is None else frame)
+            colors = import_apply_indices_to_data(colors, color_data[2])
             find_path = xsi_geometry.Parent.FullName + ".cls." + "VertexColors." + color_name
             color_prop = app.Dictionary.GetObject(find_path, False)
             if color_prop is None:
                 new_colors_prop = app.AddProp("Vertex Color", colors_cls.FullName, constants.siDefaultPropagation, color_name)
                 color_prop = new_colors_prop[1][0]
-            colors_array = utils.transpose_vectors_array(colors)
             if len(color_prop.Elements.Array[0]) > 0:
-                color_prop.Elements.Array = tuple([tuple(colors_array[0]), tuple(colors_array[1]), tuple(colors_array[2])])
+                if color_interpolation == "faceVarying":
+                    colors_array = utils.transpose_vectors_array(colors)
+                    color_prop.Elements.Array = tuple([tuple(colors_array[0]), tuple(colors_array[1]), tuple(colors_array[2])])
+                elif color_interpolation == "vertex":
+                    # for vertex data we should convert it to samples
+                    # colors is an array of float3
+                    import_set_samples_from_vertices(color_prop, xsi_geometry, colors)
 
 
 def import_set_weightmaps(app, xsi_geometry, weights_data, is_dynamic, is_topology_change, frame=None):
+    # we supports only per-vertex weight maps, so here we assign only primvars with "vertex" interpolation
     weight_cls = setup_weights_cluster(app, xsi_geometry)
     for weight_data in weights_data:
-        if (is_dynamic and len(weight_data[1]) > 1) or (not is_dynamic and len(weight_data[1]) == 1):
+        if (is_dynamic and len(weight_data[3]) > 1) or (not is_dynamic and len(weight_data[3]) == 1):
             weight_name = weight_data[0]
-            weights = utils.get_closest_data(weight_data[1], 0 if frame is None else frame)
+            weight_interpolation = weight_data[1]
+            weights = utils.get_closest_data(weight_data[3], 0 if frame is None else frame)
+            weights = import_apply_indices_to_data(weights, weight_data[2])
             find_path = xsi_geometry.Parent.FullName + ".cls." + "WeightMapCls." + weight_name
             w_prop = app.Dictionary.GetObject(find_path, False)
             if w_prop is None:
                 new_w_prop = app.CreateWeightMap("", weight_cls.FullName, weight_name, "", False)
                 w_prop = new_w_prop[0]
-            if len(w_prop.Elements.Array) == len(weights):
-                w_prop.Elements.Array = [w for w in weights]
+            if weight_interpolation == "vertex":
+                if len(w_prop.Elements.Array[0]) == len(weights):
+                    w_prop.Elements.Array = tuple([w for w in weights])
 
 
 def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=None):
@@ -683,6 +735,7 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
     is_topology_change = mesh_options["is_topology_change"]
 
     normals_data = utils.get_in_dict(mesh_data, "normals")
+    normals_interpolation = utils.get_in_dict(mesh_data, "normals_interpolation")
     uvs_data = utils.get_in_dict(mesh_data, "uvs")
     colors_data = utils.get_in_dict(mesh_data, "colors")
     weightmaps_data = utils.get_in_dict(mesh_data, "weightmaps")
@@ -696,6 +749,8 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         face_indexes = utils.get_closest_data(face_indexes_data, frame)
 
         xsi_geometry.Set(xsi_points_postions, utils.usd_to_xsi_faces_array(face_indexes, face_size, mesh_options["up_axis"]))
+        if mesh_options["up_axis"] is "Z":
+            app.ApplyTopoOp("InvertPolygon", xsi_geometry.Parent.Parent.Name, constants.siUnspecified, constants.siPersistentOperation)
 
         # sset attributes only for non-changed topology
         if not is_topology_change:
@@ -711,7 +766,7 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
 
             if "normal" in attrs and normals_data is not None and len(normals_data) == 1:
                 normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
-                import_setup_normals(app, normals, xsi_geometry, is_topology_change)
+                import_setup_normals(app, normals, normals_interpolation, xsi_geometry, is_topology_change)
 
             if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
                 import_setup_uvs(app, xsi_geometry, uvs_data, False, is_topology_change)
@@ -782,7 +837,7 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
         # next setup all other dynamic attributes
         if "normal" in attrs and normals_data is not None and len(normals_data) > 1:
             normals = utils.get_closest_data(normals_data, 0 if frame is None else frame)  # array of vector coordinates
-            import_setup_normals(app, normals, xsi_geometry, is_topology_change)
+            import_setup_normals(app, normals, normals_interpolation, xsi_geometry, is_topology_change)
 
         if "uvmap" in attrs and uvs_data is not None and len(uvs_data) > 0:
             import_setup_uvs(app, xsi_geometry, uvs_data, True, is_topology_change, frame=frame)

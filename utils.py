@@ -476,7 +476,7 @@ def usd_to_xsi_faces_array(face_indexes, face_sizes, up_axis):
         polygons.append(f)
         start_polygon_index = index  # index of the first point in the polygon
         for i in range(f):
-            if up_axis == "Y":
+            if True or up_axis == "Y":
                 polygons.append(face_indexes[index])
             else:  # invert the polygon
                 if i == 0:  # the first point is the same
