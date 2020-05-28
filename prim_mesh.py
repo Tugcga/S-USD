@@ -295,7 +295,7 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
         for xsi_mat in mesh_object.Materials:
             mat_name = utils.buil_material_name(xsi_mat)
             mat_ref = ref_stage.DefinePrim(str(usd_xform.GetPath()) + "/" + mat_name)
-            mat_ref.GetReferences().AddReference(rel_material_path, "/" + xsi_mat.Library.Name + "/" + xsi_mat.Name)
+            mat_ref.GetReferences().AddReference(rel_material_path, "/Materials/" + xsi_mat.Library.Name + "/" + xsi_mat.Name)
             material_to_usd[utils.build_material_identifier(xsi_mat)] = UsdShade.Material(ref_stage.GetPrimAtPath(mat_ref.GetPath()))
         # bind the main material
         main_material = mesh_object.Material

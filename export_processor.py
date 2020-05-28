@@ -37,7 +37,7 @@ def export(app, file_path, params, xsi_toolkit):
 
     stage = Usd.Stage.CreateNew(file_path)
     path_head, path_tail = os.path.split(file_path)
-    path_for_objects = path_head + "\\" + utils.get_file_name(path_tail) + "_objects\\"
+    path_for_objects = path_head + "\\" + utils.get_file_name(path_tail) + "_assets\\"
     utils.add_stage_metadata(stage, params)
 
     opts = params.get("options", None)
@@ -51,11 +51,12 @@ def export(app, file_path, params, xsi_toolkit):
 
     root_path = ""
     materials_opt = {}  # some parameters of the exported materials
-    material_asset_path = None
     if is_materials:
-        materials_path = path_head + "\\" + utils.get_file_name(path_tail) + "_materials." + opts["extension"]
-        material_asset_path = materials.export_materials(app, params, stage, materials_path, progress_bar)
-    materials_opt["asset_path"] = material_asset_path
+        # materials_path = path_head + "\\" + utils.get_file_name(path_tail) + "_materials." + opts["extension"]  # this is used for saving materials to separate file
+        # material_asset_path = materials.export_materials(app, params, stage, materials_path, progress_bar)
+        materials.export_materials_in_stage(app, params, stage, progress_bar)
+    # materials_opt["asset_path"] = material_asset_path
+    materials_opt["asset_path"] = file_path
 
     exported_objects = []  # store here ObjectID of exported objects
     if len(params["objects_list"]) == 1 and params["objects_list"][0].ObjectID == app.ActiveProject2.ActiveScene.Root.ObjectID:

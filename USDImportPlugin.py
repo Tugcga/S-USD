@@ -33,9 +33,15 @@ def XSILoadPlugin(in_reg):
 
     in_reg.RegisterCommand("USDImportCommand", "USDImportCommand")
     in_reg.RegisterCommand("USDImportOpen", "USDImportOpen")
+    in_reg.RegisterMenu(constants.siMenuMainFileImportID, "USD Import", False, False)
     # RegistrationInsertionPoint - do not remove this line
 
-    return true
+    return True
+
+
+def USDImport_Init(ctxt):
+    menu = ctxt.source
+    menu.AddCommandItem("Import USD...", "USDImportOpen")
 
 
 def XSIUnloadPlugin(in_reg):

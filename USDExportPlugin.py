@@ -60,7 +60,7 @@ def XSILoadPlugin(in_reg):
 
 def USDExport_Init(ctxt):
     menu = ctxt.source
-    menu.AddCommandItem("USD file...", "USDExportOpen")
+    menu.AddCommandItem("Export USD...", "USDExportOpen")
 
 
 def XSIUnloadPlugin(in_reg):

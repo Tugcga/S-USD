@@ -1,4 +1,4 @@
-from pxr import Usd, UsdShade, Sdf
+from pxr import Usd, UsdShade, Sdf, UsdGeom
 import utils
 import imp
 import os
@@ -64,6 +64,25 @@ def export_materials(app, params, stage, materials_path, progress_bar=None):
     mat_stage.Save()
 
     return materials_path
+
+
+def export_materials_in_stage(app, params, stage, progress_bar=None):
+    if DEBUG_MODE:
+        imp.reload(utils)
+
+    scene = app.ActiveProject2.ActiveScene
+    usd_scope = UsdGeom.Scope.Define(stage, "/Materials")
+    for library in scene.MaterialLibraries:
+        lib_name = library.Name
+        stage.DefinePrim(str(usd_scope.GetPath()) + "/" + lib_name)
+        for mat in library.Items:
+            if progress_bar is not None:
+                progress_bar.Caption = "Export material " + mat.Name + " (library " + lib_name + ")"
+            mat_name = mat.Name
+            # add material to usd
+            usd_material = UsdShade.Material.Define(stage, str(usd_scope.GetPath()) + "/" + lib_name + "/" + mat_name)
+            set_material(mat, stage, usd_material)
+    return str(usd_scope.GetPath())
 
 
 # --------------------------------------------------------------
