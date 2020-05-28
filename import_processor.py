@@ -1,5 +1,6 @@
 from win32com.client import constants
 from pxr import Usd, UsdGeom
+import time
 import utils
 import prim_xform
 import prim_hair
@@ -10,16 +11,21 @@ import prim_camera
 import materials
 import imp
 
+DEBUG_MODE = True
+
 
 def import_usd(app, file_path, options, xsi_toolkit):
-    imp.reload(utils)
-    imp.reload(prim_xform)
-    imp.reload(prim_mesh)
-    imp.reload(prim_pointcloud)
-    imp.reload(prim_hair)
-    imp.reload(prim_light)
-    imp.reload(prim_camera)
-    imp.reload(materials)
+    if DEBUG_MODE:
+        imp.reload(utils)
+        imp.reload(prim_xform)
+        imp.reload(prim_mesh)
+        imp.reload(prim_pointcloud)
+        imp.reload(prim_hair)
+        imp.reload(prim_light)
+        imp.reload(prim_camera)
+        imp.reload(materials)
+
+    start_time = time.time()
 
     progress_bar = xsi_toolkit.ProgressBar
     progress_bar.Caption = ""
@@ -60,6 +66,9 @@ def import_usd(app, file_path, options, xsi_toolkit):
             app.DeleteObj("B:" + cameras_to_remove[cam_index].Name)
 
     progress_bar.Visible = False
+
+    finish_time = time.time()
+    print("[USD Import]: total import time " + str(finish_time - start_time) + " seconds")
 
 
 def geather_childrens(usd_prim):

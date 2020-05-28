@@ -6,6 +6,8 @@ import materials
 import utils
 import imp
 
+DEBUG_MODE = True
+
 # ---------------------------------------------------------
 # ----------------------export-----------------------------
 
@@ -43,9 +45,10 @@ def set_pointcloud_at_frame(pointcloud_geometry, usd_pointcloud, usd_points_prim
 
 
 def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, materials_opt, root_path, progress_bar=None):
-    imp.reload(prim_xform)
-    imp.reload(materials)
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(prim_xform)
+        imp.reload(materials)
+        imp.reload(utils)
 
     opt_animation = params.get("animation", None)
     usd_xform, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, True, stage, pointcloud_object, root_path)
@@ -91,7 +94,9 @@ def split_positions_to_strands_and_points(raw_positions, segment_length):
 
 
 def write_ice_cache_at_frame(folder_path, object_name, raw_points, width_data, segments_data, frame=None):
-    imp.reload(icecache)
+    if DEBUG_MODE:
+        imp.reload(icecache)
+
     if segments_data is not None:
         strands_data, points_data = split_positions_to_strands_and_points(raw_points, segments_data)
         width_data = utils.extract_subarray(width_data, segments_data)
@@ -130,8 +135,10 @@ def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_n
 
     if is_constant_points:
         in_tfm = usd_pointcloud.GetLocalTransformation()
+        if ignore_tfm is False and utils.is_matrices_are_different_arrays(in_tfm, [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]) is False:
+            ignore_tfm = True
+
         tfm_positions = usd_points.Get() if ignore_tfm else [utils.vector_mult_to_matrix(p, in_tfm) for p in usd_points.Get()]
-        # raw_positions = usd_points.Get() if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get()]
         raw_positions = tfm_positions if up_key is "Y" else [[p[0], p[2], p[1]] for p in tfm_positions]
         if is_strands:
             if is_constant_segments:
@@ -145,9 +152,12 @@ def write_ice_cache(usd_pointcloud, is_strands, xsi_object, project_path, file_n
         write_ice_cache_at_frame(folder_path, xsi_object.Name, raw_positions, width_data, segments_data)
     else:
         for frame in point_times:
+            frame_ignore_tfm = ignore_tfm
             in_tfm = usd_pointcloud.GetLocalTransformation(frame)
-            tfm_positions = usd_points.Get(frame) if ignore_tfm else [utils.vector_mult_to_matrix(p, in_tfm) for p in usd_points.Get(frame)]
-            # raw_positions = usd_points.Get(frame) if up_key is "Y" else [[p[0], p[2], p[1]] for p in usd_points.Get(frame)]
+            if frame_ignore_tfm is False and utils.is_matrices_are_different_arrays(in_tfm, [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]) is False:
+                frame_ignore_tfm = True
+
+            tfm_positions = usd_points.Get(frame) if frame_ignore_tfm else [utils.vector_mult_to_matrix(p, in_tfm) for p in usd_points.Get(frame)]
             raw_positions = tfm_positions if up_key is "Y" else [[p[0], p[2], p[1]] for p in tfm_positions]
             if is_strands:
                 if is_constant_segments:
@@ -181,7 +191,9 @@ def build_ice_tree(app, xsi_points, is_constant, file_name):
 def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim, is_strands, xsi_parent, is_simple=False):
     '''if is_simple is True, then we should ignore in-object ransform
     '''
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
+
     usd_object = UsdGeom.BasisCurves(usd_prim) if is_strands else UsdGeom.Points(usd_prim)
     xsi_points = app.GetPrim("PointCloud", pointloud_name, xsi_parent)
     utils.set_xsi_transform(app, xsi_points, usd_tfm, up_key=options["up_axis"])

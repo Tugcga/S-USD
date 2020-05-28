@@ -18,6 +18,7 @@ import imp
 
 app = Application
 xsi_factory = XSIFactory
+DEBUG_MODE = True
 
 
 def XSILoadPlugin(in_reg):
@@ -78,8 +79,10 @@ def USDMeshOperator_Term(in_ctxt):
 
 
 def USDMeshOperator_Update(in_ctxt):
-    imp.reload(utils)
-    imp.reload(prim_mesh)
+    if DEBUG_MODE:
+        imp.reload(utils)
+        imp.reload(prim_mesh)
+
     file_path = in_ctxt.GetParameterValue("file_path")
     mesh_path = in_ctxt.GetParameterValue("mesh_path")
     up_axis = in_ctxt.GetParameterValue("up_axis")

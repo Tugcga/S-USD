@@ -1,5 +1,6 @@
 from win32com.client import constants
 from pxr import Usd, UsdGeom
+import time
 import os
 import prim_mesh
 import prim_xform
@@ -12,17 +13,22 @@ import materials
 import utils
 import imp
 
+DEBUG_MODE = True
+
 
 def export(app, file_path, params, xsi_toolkit):
-    imp.reload(prim_xform)
-    imp.reload(prim_mesh)
-    imp.reload(prim_camera)
-    imp.reload(prim_light)
-    imp.reload(prim_hair)
-    imp.reload(prim_model)
-    imp.reload(prim_pointcloud)
-    imp.reload(materials)
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(prim_xform)
+        imp.reload(prim_mesh)
+        imp.reload(prim_camera)
+        imp.reload(prim_light)
+        imp.reload(prim_hair)
+        imp.reload(prim_model)
+        imp.reload(prim_pointcloud)
+        imp.reload(materials)
+        imp.reload(utils)
+
+    start_time = time.time()
 
     progress_bar = xsi_toolkit.ProgressBar
     progress_bar.Caption = ""
@@ -61,6 +67,9 @@ def export(app, file_path, params, xsi_toolkit):
     stage.Save()
 
     progress_bar.Visible = False
+
+    finish_time = time.time()
+    print("[USD Export]: total export time " + str(finish_time - start_time) + " seconds")
 
 
 def export_step(app, params, path_for_objects, stage, obj, exported_objects, materials_opt, root_path, progress_bar=None):

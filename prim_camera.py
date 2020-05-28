@@ -3,6 +3,8 @@ from prim_xform import add_xform
 import utils
 import imp
 
+DEBUG_MODE = True
+
 # ---------------------------------------------------------
 # ----------------------export-----------------------------
 
@@ -66,7 +68,9 @@ def set_camera_aperture(xsi_camera, usd_camera, opt_animation):
 
 
 def add_camera(app, params, path_for_objects, stage, xsi_camera, root_path):
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
+
     usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, xsi_camera, root_path)
     usd_camera = UsdGeom.Camera.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_camera.Name)
     # set time independent attributes

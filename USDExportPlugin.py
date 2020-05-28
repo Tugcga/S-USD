@@ -18,6 +18,7 @@ null = None
 false = 0
 true = 1
 app = Application
+DEBUG_MODE = True
 
 
 def log(message):
@@ -86,7 +87,9 @@ def USDExportCommand_Init(in_ctxt):
 
 
 def USDExportCommand_Execute(*args):
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
+
     app.LogMessage("USDExportCommand_Execute called", constants.siVerbose)
     scene = app.ActiveProject2.ActiveScene
     # read arguments of the command
@@ -108,15 +111,18 @@ def USDExportCommand_Execute(*args):
                           "ignore_unknown": ignore_unknown,
                           "force_change_frame": force_change_frame},
               "materials": {"is_materials": is_materials}}
+    if DEBUG_MODE:
+        imp.reload(export_processor)
 
-    imp.reload(export_processor)
     export_processor.export(app, file_path, params, XSIUIToolkit)
 
     return True
 
 
 def USDExportOpen_Execute():
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
+
     scene_root = app.ActiveProject2.ActiveScene.Root
 
     # read settings from previous opened window

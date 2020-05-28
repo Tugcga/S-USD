@@ -3,10 +3,14 @@ import prim_xform
 import export_processor
 import imp
 
+DEBUG_MODE = True
+
 
 def add_model(app, params, path_for_objects, stage, model_object, materials_opt, root_path):
-    imp.reload(prim_xform)
-    imp.reload(export_processor)
+    if DEBUG_MODE:
+        imp.reload(prim_xform)
+        imp.reload(export_processor)
+
     usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, model_object, root_path, is_instance=True)
 
     model_objects = []

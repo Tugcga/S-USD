@@ -18,6 +18,7 @@ null = None
 false = 0
 true = 1
 app = Application
+DEBUG_MODE = True
 
 
 def log(message):
@@ -73,8 +74,9 @@ def USDImportCommand_Execute(*args):
                       "object_types": object_types,
                       "light_mode": light_mode,
                       "XSIMath": XSIMath}
+    if DEBUG_MODE:
+        imp.reload(import_processor)
 
-    imp.reload(import_processor)
     if file_path is not None and len(file_path) > 0 and os.path.isfile(file_path):
         import_processor.import_usd(app, file_path, import_options, XSIUIToolkit)
     else:
@@ -84,7 +86,9 @@ def USDImportCommand_Execute(*args):
 
 
 def USDImportOpen_Execute():
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
+
     scene_root = app.ActiveProject2.ActiveScene.Root
 
     plugin_path = utils.get_plugin_path(app, "USDImportPlugin")

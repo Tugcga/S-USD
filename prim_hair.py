@@ -4,6 +4,8 @@ import materials
 import utils
 import imp
 
+DEBUG_MODE = True
+
 # ---------------------------------------------------------
 # ----------------------export-----------------------------
 
@@ -50,9 +52,11 @@ def set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim, frame=None):
 
 
 def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root_path, progress_bar=None):
-    imp.reload(utils)
-    imp.reload(prim_xform)
-    imp.reload(materials)
+    if DEBUG_MODE:
+        imp.reload(utils)
+        imp.reload(prim_xform)
+        imp.reload(materials)
+
     usd_xform, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_hair, root_path)
     usd_curves = UsdGeom.BasisCurves.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_hair.Name)
     usd_curves_prim = ref_stage.GetPrimAtPath(usd_curves.GetPath())
@@ -100,9 +104,11 @@ def set_strands_at_frame(xsi_geometry, usd_curves, usd_curves_prim, frame=None):
 
 
 def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, root_path, progress_bar=None):
-    imp.reload(utils)
-    imp.reload(prim_xform)
-    imp.reload(materials)
+    if DEBUG_MODE:
+        imp.reload(utils)
+        imp.reload(prim_xform)
+        imp.reload(materials)
+
     usd_xform, ref_stage, ref_stage_asset = prim_xform.add_xform(app, params, path_for_objects, True, stage, xsi_pc, root_path)
     usd_curves = UsdGeom.BasisCurves.Define(ref_stage, str(usd_xform.GetPath()) + "/" + xsi_pc.Name)
     usd_curves_prim = ref_stage.GetPrimAtPath(usd_curves.GetPath())

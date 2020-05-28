@@ -3,6 +3,8 @@ import utils
 import imp
 import os
 
+DEBUG_MODE = True
+
 
 def add_material(materials_opt, xsi_mat, stage, stage_asset_path, usd_xform, usd_prim, is_bind=True):  # do the same in prim_mesh
     material_asset_path = materials_opt.get("asset_path", None)
@@ -38,7 +40,9 @@ def set_material_complete(root_shader, stage, usd_material):
 
 
 def export_materials(app, params, stage, materials_path, progress_bar=None):
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
+
     # create new stage for materials
     materials_folder, materials_file_name = os.path.split(materials_path)
     mat_stage = Usd.Stage.CreateNew(materials_path)
@@ -73,7 +77,9 @@ def import_clear_library(app, lib_name):
 def import_material(app, usd_material, library_name=None):
     '''it return xsi_material, created if needed for usd_material
     '''
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
+
     if usd_material.GetPath() == "":
         return None
     else:

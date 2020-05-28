@@ -4,6 +4,8 @@ import materials
 import utils
 import imp
 
+DEBUG_MODE = True
+
 # ---------------------------------------------------------
 # ----------------------export-----------------------------
 
@@ -46,8 +48,10 @@ def set_light_at_frame(xsi_light, xsi_light_type, xsi_geom_type, usd_light, fram
 
 
 def add_light(app, params, path_for_objects, stage, xsi_light, root_path):  # here me add only basic parameters, all other will be defined in the material
-    imp.reload(materials)
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(materials)
+        imp.reload(utils)
+
     # basic transform
     usd_xform, ref_stage, ref_stage_asset = add_xform(app, params, path_for_objects, True, stage, xsi_light, root_path)
     # get the type of the light

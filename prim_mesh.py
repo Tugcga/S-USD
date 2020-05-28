@@ -5,6 +5,8 @@ import utils
 import materials
 import imp
 
+DEBUG_MODE = True
+
 # -------------------------------------------------------------
 # -------------------export------------------------------------
 
@@ -271,8 +273,10 @@ def add_mesh(app, params, path_for_objects, stage, mesh_object, materials_opt, r
        mesh_object is a polygonmesh X3DObject
        root_path is a string for the parent path in the stage
     '''
-    imp.reload(prim_xform)
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(prim_xform)
+        imp.reload(utils)
+
     opt_attributes = params["attr_list"]
     opt_animation = params.get("animation", None)
     opt = params.get("options", {})
@@ -330,16 +334,25 @@ def read_points(usd_mesh, up_axis, ignore_tfm):
     times = usd_points.GetTimeSamples()
     in_mesh_tfm = usd_mesh.GetLocalTransformation()  # get at fisrt frame, ignore the animation
     # in_mesh_tfm is a row-based matrix, the last row is position, the last column is 0, 0, 0, 1
+    is_tfm_nontrivial = utils.is_matrices_are_different_arrays(in_mesh_tfm, [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+    if ignore_tfm is False and is_tfm_nontrivial is False:
+        ignore_tfm = True
     sorted(times)
     if len(times) <= 0:
-        tfm_positions = [p if ignore_tfm else utils.vector_mult_to_matrix(p, in_mesh_tfm) for p in usd_points.Get()]
+        if ignore_tfm:
+            tfm_positions = usd_points.Get()
+        else:
+            tfm_positions = [utils.vector_mult_to_matrix(p, in_mesh_tfm) for p in usd_points.Get()]
         if up_axis == "Y":
             to_return.append((0, tfm_positions))
         else:  # convert each vertex positions, swap y and z coordinates
             to_return.append((0, [(p[0], p[2], p[1]) for p in tfm_positions]))
     else:
         for frame in times:
-            points_at_frame = [p if ignore_tfm else utils.vector_mult_to_matrix(p, in_mesh_tfm) for p in usd_points.Get(frame)]
+            if ignore_tfm:
+                points_at_frame = usd_points.Get(frame)
+            else:
+                points_at_frame = [utils.vector_mult_to_matrix(p, in_mesh_tfm) for p in usd_points.Get(frame)]
             if up_axis == "Y":
                 to_return.append((frame, points_at_frame))
             else:
@@ -424,7 +437,7 @@ def read_normals(usd_mesh, up_axis, ignore_tfm):
     times = usd_normals.GetTimeSamples()
     in_mesh_tfm = usd_mesh.GetLocalTransformation()
     is_tfm_nontrivial = utils.is_matrices_are_different_arrays(in_mesh_tfm, [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
-    if not is_tfm_nontrivial:
+    if ignore_tfm is False and is_tfm_nontrivial is False:
         ignore_tfm = True
     sorted(times)
     if len(times) <= 1:
@@ -861,8 +874,10 @@ def set_geometry_from_data(app, xsi_geometry, mesh_options, mesh_data, frame=Non
 def emit_mesh(app, options, mesh_name, usd_tfm, visibility, usd_prim, xsi_parent, is_simple=False):
     '''is_simple=True if Mesh component is not unique subcomponents of the XForm, in this case we should ignore in_mesh transform, because it already used by object transform
     '''
-    imp.reload(utils)
-    imp.reload(materials)
+    if DEBUG_MODE:
+        imp.reload(utils)
+        imp.reload(materials)
+
     usd_mesh = UsdGeom.Mesh(usd_prim)
     xsi_mesh = app.GetPrim("EmptyPolygonMesh", mesh_name, xsi_parent)
 

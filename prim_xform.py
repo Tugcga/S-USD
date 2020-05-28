@@ -2,6 +2,8 @@ from pxr import Usd, UsdGeom
 import utils
 import imp
 
+DEBUG_MODE = True
+
 # ---------------------------------------------------------
 # ----------------------export-----------------------------
 
@@ -21,7 +23,8 @@ def add_visibility_to_xfo(usd_xform, xsi_obj):
 
 
 def add_xform(app, params, path_for_objects, create_ref, stage, obj, root_path, is_instance=False):
-    imp.reload(utils)
+    if DEBUG_MODE:
+        imp.reload(utils)
     # we should create a new stage and reference the old one to this new
     opt_animation = params.get("animation", None)
     if create_ref:
