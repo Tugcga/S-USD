@@ -170,6 +170,25 @@ def is_matrices_are_different(matrix_a, matrix_b):
            abs(matrix_a.Value(3, 3) - matrix_b.Value(3, 3)) > EPSILON
 
 
+def is_matrices_are_different_arrays(matrix_a, matrix_b):
+    return abs(matrix_a[0][0] - matrix_b[0][0]) > EPSILON or\
+           abs(matrix_a[0][1] - matrix_b[0][1]) > EPSILON or\
+           abs(matrix_a[0][2] - matrix_b[0][2]) > EPSILON or\
+           abs(matrix_a[0][3] - matrix_b[0][3]) > EPSILON or\
+           abs(matrix_a[1][0] - matrix_b[1][0]) > EPSILON or\
+           abs(matrix_a[1][1] - matrix_b[1][1]) > EPSILON or\
+           abs(matrix_a[1][2] - matrix_b[1][2]) > EPSILON or\
+           abs(matrix_a[1][3] - matrix_b[1][3]) > EPSILON or\
+           abs(matrix_a[2][0] - matrix_b[2][0]) > EPSILON or\
+           abs(matrix_a[2][1] - matrix_b[2][1]) > EPSILON or\
+           abs(matrix_a[2][2] - matrix_b[2][2]) > EPSILON or\
+           abs(matrix_a[2][3] - matrix_b[2][3]) > EPSILON or\
+           abs(matrix_a[3][0] - matrix_b[3][0]) > EPSILON or\
+           abs(matrix_a[3][1] - matrix_b[3][1]) > EPSILON or\
+           abs(matrix_a[3][2] - matrix_b[3][2]) > EPSILON or\
+           abs(matrix_a[3][3] - matrix_b[3][3]) > EPSILON
+
+
 def is_transform_animated(xsi_obj, opt_anim):
     if opt_anim is None:
         return False

@@ -423,17 +423,26 @@ def read_normals(usd_mesh, up_axis, ignore_tfm):
     usd_normals = usd_mesh.GetNormalsAttr()
     times = usd_normals.GetTimeSamples()
     in_mesh_tfm = usd_mesh.GetLocalTransformation()
+    is_tfm_nontrivial = utils.is_matrices_are_different_arrays(in_mesh_tfm, [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+    if not is_tfm_nontrivial:
+        ignore_tfm = True
     sorted(times)
     if len(times) <= 1:
         usd_normals_data = usd_normals.Get()
         if usd_normals_data is not None:
-            usd_normals_data_tfm = [n if ignore_tfm else utils.vector_mult_to_matrix(n, in_mesh_tfm, remove_translation=True) for n in usd_normals_data]
+            if ignore_tfm:
+                usd_normals_data_tfm = usd_normals_data
+            else:
+                usd_normals_data_tfm = [utils.vector_mult_to_matrix(n, in_mesh_tfm, remove_translation=True) for n in usd_normals_data]
             to_return.append((0, usd_normals_data_tfm if up_axis == "Y" else [(n[0], n[2], n[1]) for n in usd_normals_data_tfm]))
     else:
         for frame in times:
             vals_at_frame = usd_normals.Get(frame)
             if vals_at_frame is not None:
-                vals_at_frame_tfm = [n if ignore_tfm else utils.vector_mult_to_matrix(n, in_mesh_tfm, remove_translation=True) for n in vals_at_frame]
+                if ignore_tfm:
+                    vals_at_frame_tfm = vals_at_frame
+                else:
+                    vals_at_frame_tfm = [utils.vector_mult_to_matrix(n, in_mesh_tfm, remove_translation=True) for n in vals_at_frame]
                 to_return.append((frame, vals_at_frame_tfm if up_axis == "Y" else [(n[0], n[2], n[1]) for n in vals_at_frame_tfm]))
 
     return to_return, usd_mesh.GetNormalsInterpolation()
