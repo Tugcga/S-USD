@@ -11,7 +11,7 @@ import prim_camera
 import materials
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def import_usd(app, file_path, options, xsi_toolkit):

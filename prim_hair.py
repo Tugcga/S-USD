@@ -4,7 +4,7 @@ import materials
 import utils
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 # ---------------------------------------------------------
 # ----------------------export-----------------------------
@@ -70,6 +70,7 @@ def add_hair(app, params, path_for_objects, stage, xsi_hair, materials_opt, root
         for frame in range(opt_animation[0], opt_animation[1] + 1):
             if progress_bar is not None:
                 progress_bar.Caption = utils.build_export_object_caption(xsi_hair, frame)
+            # for xsi-hairs we does not need update time frame
             set_hair_at_frame(app, xsi_hair, usd_curves, usd_curves_prim, frame)
     ref_stage.Save()
 
@@ -116,12 +117,16 @@ def add_strands(app, params, path_for_objects, stage, xsi_pc, materials_opt, roo
     materials.add_material(materials_opt, xsi_pc.Material, ref_stage, ref_stage_asset, usd_xform, usd_curves_prim)
 
     opt_animation = params.get("animation", None)
+    opt = params.get("options", {})
     if opt_animation is None or not utils.is_poincloud_animated(xsi_pc, opt_animation, check_strands=True):
         set_strands_at_frame(xsi_pc.GetActivePrimitive3().Geometry, usd_curves, usd_curves_prim)
     else:
         for frame in range(opt_animation[0], opt_animation[1] + 1):
             if progress_bar is not None:
                 progress_bar.Caption = utils.build_export_object_caption(xsi_pc, frame)
+            if opt.get("force_change_frame", False):
+                app.SetValue("PlayControl.Current", frame, "")
+                app.SetValue("PlayControl.Key", frame, "")
             set_strands_at_frame(xsi_pc.GetActivePrimitive3(frame).GetGeometry3(frame), usd_curves, usd_curves_prim, frame)
     ref_stage.Save()
 

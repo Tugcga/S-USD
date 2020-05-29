@@ -18,7 +18,7 @@ null = None
 false = 0
 true = 1
 app = Application
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def log(message):

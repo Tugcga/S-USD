@@ -2,7 +2,7 @@ from pxr import Usd, UsdGeom
 import utils
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 # ---------------------------------------------------------
 # ----------------------export-----------------------------

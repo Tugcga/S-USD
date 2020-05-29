@@ -3,7 +3,7 @@ from prim_xform import add_xform
 import utils
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 # ---------------------------------------------------------
 # ----------------------export-----------------------------

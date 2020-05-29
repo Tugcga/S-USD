@@ -18,7 +18,7 @@ null = None
 false = 0
 true = 1
 app = Application
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def log(message):
@@ -143,13 +143,13 @@ def USDExportOpen_Execute():
                         "is_nulls": True,
                         "is_models": True,
                         "is_uv_maps": True,
-                        "is_normals": True,
-                        "is_weightmaps": True,
-                        "is_clusters": True,
-                        "is_vertex_creases": True,
-                        "is_edge_creases": True,
-                        "is_vertex_color": True,
-                        "is_materials": True,
+                        "is_normals": False,
+                        "is_weightmaps": False,
+                        "is_clusters": False,
+                        "is_vertex_creases": False,
+                        "is_edge_creases": False,
+                        "is_vertex_color": False,
+                        "is_materials": False,
                         "start_frame": get_start_timeline_frame(),
                         "end_frame": get_end_timeline_frame(),
                         "opt_subdiv": False,

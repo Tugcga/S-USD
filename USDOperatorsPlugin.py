@@ -18,7 +18,7 @@ import imp
 
 app = Application
 xsi_factory = XSIFactory
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def XSILoadPlugin(in_reg):

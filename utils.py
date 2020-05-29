@@ -525,7 +525,7 @@ def from_scene_path_to_models_path(path):
     models_path = "\\".join(folders[:-1]) + "\\Models\\"
     # change extension in the file name
     name_parts = path_tail.split(".")
-    file_name = ".".join(name_parts[:-1]) + ".usda"
+    file_name = ".".join(name_parts[:-1]) + ".usd"
 
     to_return = models_path + file_name
     print("[USD export]: Save to " + to_return)
@@ -612,15 +612,15 @@ def verify_extension(app, file_path):
     path_head, path_tail = os.path.split(file_path)
     point_index = path_tail.rfind(".")
     if point_index < 0:
-        print("[USD export]: set extension of the output file *.usda")
-        return file_path + ".usda"
+        print("[USD export]: set extension of the output file *.usd")
+        return file_path + ".usd"
     else:
         file_ext = path_tail[point_index + 1:]
         if file_ext in ["usd", "usda", "usdz", "usdc"]:
             return file_path
         else:
-            print("[USD export]: change extension of the output file to *.usda")
-            return path_head + "\\" + path_tail[:point_index] + ".usda"
+            print("[USD export]: change extension of the output file to *.usd")
+            return path_head + "\\" + path_tail[:point_index] + ".usd"
 
 
 def transform_path_to_relative(path, base_path):

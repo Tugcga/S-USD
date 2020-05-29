@@ -13,7 +13,7 @@ import materials
 import utils
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def export(app, file_path, params, xsi_toolkit):

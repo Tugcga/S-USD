@@ -5,7 +5,7 @@ import utils
 import materials
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 # -------------------------------------------------------------
 # -------------------export------------------------------------

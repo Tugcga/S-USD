@@ -1,4 +1,4 @@
-from pxr import UsdGeom, Usd, Sdf
+from pxr import UsdGeom, Usd, Sdf, UsdShade
 import os
 import icecache
 import prim_xform
@@ -6,7 +6,7 @@ import materials
 import utils
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 # ---------------------------------------------------------
 # ----------------------export-----------------------------
@@ -56,6 +56,7 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
     usd_points_prim = ref_stage.GetPrimAtPath(usd_points.GetPath())
 
     materials.add_material(materials_opt, pointcloud_object.Material, ref_stage, ref_stage_asset, usd_xform, usd_points_prim)
+    opt = params.get("options", {})
 
     if opt_animation is None or not utils.is_poincloud_animated(pointcloud_object, opt_animation):
         set_pointcloud_at_frame(pointcloud_object.GetActivePrimitive3().Geometry, usd_points, usd_points_prim)
@@ -63,6 +64,9 @@ def add_pointcloud(app, params, path_for_objects, stage, pointcloud_object, mate
         for frame in range(opt_animation[0], opt_animation[1] + 1):
             if progress_bar is not None:
                 progress_bar.Caption = utils.build_export_object_caption(pointcloud_object, frame)
+            if opt.get("force_change_frame", False):
+                app.SetValue("PlayControl.Current", frame, "")
+                app.SetValue("PlayControl.Key", frame, "")
             set_pointcloud_at_frame(pointcloud_object.GetActivePrimitive3(frame).GetGeometry3(frame), usd_points, usd_points_prim, frame=frame)
 
     return stage.GetPrimAtPath(root_path + str(usd_xform.GetPath()))
@@ -192,10 +196,18 @@ def emit_pointcloud(app, options, pointloud_name, usd_tfm, visibility, usd_prim,
     '''if is_simple is True, then we should ignore in-object ransform
     '''
     if DEBUG_MODE:
+        imp.reload(materials)
         imp.reload(utils)
 
     usd_object = UsdGeom.BasisCurves(usd_prim) if is_strands else UsdGeom.Points(usd_prim)
     xsi_points = app.GetPrim("PointCloud", pointloud_name, xsi_parent)
+
+    if options.get("is_materials", False):
+        usd_material = UsdShade.MaterialBindingAPI(usd_prim).GetDirectBinding().GetMaterial()
+        xsi_material = materials.import_material(app, usd_material, library_name=options["file_name"])
+        if xsi_material is not None:
+            app.AssignMaterial(xsi_material.FullName + "," + xsi_points.FullName)
+
     utils.set_xsi_transform(app, xsi_points, usd_tfm, up_key=options["up_axis"])
     utils.set_xsi_visibility(xsi_points, visibility)
     if "project_path" in options:

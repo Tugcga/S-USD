@@ -3,7 +3,7 @@ import utils
 import imp
 import os
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def add_material(materials_opt, xsi_mat, stage, stage_asset_path, usd_xform, usd_prim, is_bind=True):  # do the same in prim_mesh

@@ -3,7 +3,7 @@ import prim_xform
 import export_processor
 import imp
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def add_model(app, params, path_for_objects, stage, model_object, materials_opt, root_path):
